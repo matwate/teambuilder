@@ -30,7 +30,7 @@ def search_names(
     *,
     order_by: str = "number",
     db: Path = DB_PATH,
-) -> list[tuple]:
+) -> list[str]:
     # "TRUE" is a valid WHERE, so no-filters needs no special case.
     columns = "name"
     where = filters.sql if filters else "TRUE"

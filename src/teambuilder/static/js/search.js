@@ -141,8 +141,8 @@ $(document).ready(function() {
             hp_max: $('#hp_max').val() ? parseInt($('#hp_max').val()) : null,
             atk_min: $('#atk_min').val() ? parseInt($('#atk_min').val()) : null,
             atk_max: $('#atk_max').val() ? parseInt($('#atk_max').val()) : null,
-            def_min: $('#def_min').val() ? parseInt($('#def_min').val()) : null,
-            def_max: $('#def_max').val() ? parseInt($('#def_max').val()) : null,
+            defender_min: $('#defender_min').val() ? parseInt($('#defender_min').val()) : null,
+            defender_max: $('#defender_max').val() ? parseInt($('#defender_max').val()) : null,
             spa_min: $('#spa_min').val() ? parseInt($('#spa_min').val()) : null,
             spa_max: $('#spa_max').val() ? parseInt($('#spa_max').val()) : null,
             spd_min: $('#spd_min').val() ? parseInt($('#spd_min').val()) : null,
@@ -181,8 +181,8 @@ $(document).ready(function() {
             if (filters.hp_max !== null && pokemon.hp > filters.hp_max) return false;
             if (filters.atk_min !== null && pokemon.atk < filters.atk_min) return false;
             if (filters.atk_max !== null && pokemon.atk > filters.atk_max) return false;
-            if (filters.def_min !== null && pokemon.def < filters.def_min) return false;
-            if (filters.def_max !== null && pokemon.def > filters.def_max) return false;
+            if (filters.defender_min !== null && pokemon.def < filters.defender_min) return false;
+            if (filters.defender_max !== null && pokemon.def > filters.defender_max) return false;
             if (filters.spa_min !== null && pokemon.spa < filters.spa_min) return false;
             if (filters.spa_max !== null && pokemon.spa > filters.spa_max) return false;
             if (filters.spd_min !== null && pokemon.spd < filters.spd_min) return false;

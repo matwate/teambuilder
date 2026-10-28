@@ -75,6 +75,7 @@ $(document).ready(function() {
             data.forEach(function(item) {
                 $this.append('<option value="' + item + '">' + item + '</option>');
             });
+            $this.trigger('items-loaded');
             $this.select2({
                 placeholder: 'Select Item',
                 allowClear: true,
@@ -86,6 +87,9 @@ $(document).ready(function() {
     // When attacker is selected, load its moves and abilities
     $('#attacker').change(function() {
         const pokemon = $(this).val();
+        $('#move').empty().append('<option value="">Select Move</option>').val('').trigger('change');
+        $('#attacker_item').val('').trigger('change');
+        $('#attacker_ability').empty().append('<option value="">Any</option>').val('').trigger('change');
         if (pokemon) {
             // Load moves for this specific Pokemon
             $.get('/api/moves/' + pokemon, function(data) {
@@ -109,14 +113,13 @@ $(document).ready(function() {
                         width: '100%'
                     });
                 }
-                // Auto-select if only one ability
+                // Auto-select if only one ability and apply its field effect.
                 if (data.length === 1) {
-                    $('#attacker_ability').val(data[0]);
+                    $('#attacker_ability').val(data[0]).trigger('change');
                 }
             });
         } else {
             $('#move').empty().append('<option value="">Select Move</option>');
-            $('#attacker_ability').empty().append('<option value="">Any</option>');
         }
     });
 
@@ -124,6 +127,34 @@ $(document).ready(function() {
     $('#searchBtn').click(function() {
         performBulkSurvive();
     });
+
+    // Cancel button click handler
+    $('#cancelBtn').click(function() {
+        if (window.eventSource) {
+            window.eventSource.close();
+            window.eventSource = null;
+        }
+        finishSearch();
+        if (rows.length === 0) {
+            $('#resultsBody').html('<tr><td colspan="6" style="text-align: center;">Search cancelled</td></tr>');
+        }
+    });
+
+    // Every survivor streamed in so far, kept so the table can be sorted at the end.
+    let rows = [];
+    let fairyAuraActive = false;
+
+    function esc(value) {
+        return $('<div>').text(value == null ? '' : value).html();
+    }
+
+    // Put the controls back the way they were before a search started.
+    function finishSearch() {
+        $('#searchBtn').prop('disabled', false);
+        $('#cancelBtn').hide();
+        $('#progressBar').hide();
+        $('#progressText').hide();
+    }
 
     function performBulkSurvive() {
         const attacker = $('#attacker').val();
@@ -133,11 +164,6 @@ $(document).ready(function() {
             return;
         }
 
-        // Determine move category for stat mapping
-        $.get('/api/move-category/' + move, function(categoryData) {
-            const moveCategory = categoryData.category;
-            const attackerStat = moveCategory === 'Physical' ? 'physical' : 'special';
-
             // Collect form data
             const data = {
                 attacker: attacker,
@@ -145,66 +171,115 @@ $(document).ready(function() {
                 attacker_item: $('#attacker_item').val() || null,
                 attacker_ability: $('#attacker_ability').val() || null,
                 attacker_evs: $('#attacker_evs').val() || '32',
-                attacker_stat: attackerStat,
                 defender_item: $('#defender_item').val() || null,
+                defender_nature: $('#defender_nature').val() || '1.0',
                 percent: $('#survival_percent').val() ? parseFloat($('#survival_percent').val()) : 100.0,
-                // Defender filters
                 filter_type1: $('#filter_type1').val() || null,
                 filter_ability: $('#filter_ability').val() || null,
                 filter_min_bst: $('#filter_min_bst').val() ? parseInt($('#filter_min_bst').val()) : null,
-                filter_min_hp: $('#filter_min_hp').val() ? parseInt($('#filter_min_hp').val()) : null
+                filter_min_hp: $('#filter_min_hp').val() ? parseInt($('#filter_min_hp').val()) : null,
+                format: $('input[name="format"]:checked').val() || 'doubles',
+                terrain: $('input[name="terrain"]:checked').val() || null,
+                weather: $('input[name="weather"]:checked').val() || null,
+                field: $('input[name="fieldState"]:checked').map(function() { return this.value; }).get(),
+                spikes: $('input[name="spikes"]:checked').val() || '0',
+                isSR: $('#SR').is(':checked'),
+                isReflect: $('#reflect').is(':checked'),
+                isLightScreen: $('#lightScreen').is(':checked'),
+                isAuroraVeil: $('#auroraVeil').is(':checked'),
+                isFriendGuard: $('#friendGuard').is(':checked'),
+                isProtect: $('#protect').is(':checked'),
+                isLeechSeed: $('#leechSeed').is(':checked'),
+                isSaltCure: $('#saltCure').is(':checked'),
+                isCharge: $('#charge').is(':checked'),
+                isHelpingHand: $('#helpingHand').is(':checked'),
+                isPowerTrickLeft: $('#powerTrickL').is(':checked'),
+                isPowerTrickRight: $('#powerTrickR').is(':checked')
             };
+        fairyAuraActive = data.field.includes('FairyAura');
 
-            // Show loading state
-            $('#searchBtn').prop('disabled', true);
-            $('#progressBar').show();
-            $('#progressFill').css('width', '0%');
-            $('#progressText').show().text('Initializing...');
-            $('#resultsBody').html('<tr><td colspan="6" style="text-align: center;">Calculating... this may take several minutes</td></tr>');
-            $('#resultsCount').text('');
+        // Show loading state
+        rows = [];
+        $('#searchBtn').prop('disabled', true);
+        $('#cancelBtn').show();
+        $('#progressBar').show();
+        $('#progressFill').css('width', '0%');
+        $('#progressText').show().text('Initializing...');
+        $('#resultsBody').empty();
+        $('#resultsCount').text('0 results');
 
-            // Simulate progress (since we can't get real progress from the backend)
-            // Use a slower, more realistic progress update
-            let progress = 0;
-            const progressInterval = setInterval(function() {
-                progress += 2; // Slower increment
-                if (progress > 95) progress = 95;
-                $('#progressFill').css('width', progress + '%');
-                $('#progressText').text(`Processing... ${Math.round(progress)}%`);
-            }, 1000);
+        // Use Server-Sent Events for real-time progress
+        const queryString = $.param(data);
+        window.eventSource = new EventSource('/api/bulk-survive-stream?' + queryString);
 
-            // Make AJAX request
-            $.ajax({
-                url: '/api/bulk-survive',
-                method: 'POST',
-                contentType: 'application/json',
-                data: JSON.stringify(data),
-                success: function(response) {
-                    clearInterval(progressInterval);
-                    $('#progressFill').css('width', '100%');
+        window.eventSource.onmessage = function(event) {
+            const msg = JSON.parse(event.data);
 
-                    if (response.success) {
-                        displayResults(response.results);
-                    } else {
-                        $('#resultsBody').html('<tr><td colspan="6" style="text-align: center; color: red;">Error: ' + response.error + '</td></tr>');
+            if (msg.type === 'start') {
+                $('#progressText').text(`Starting to check ${msg.total} Pokemon...`);
+            } else if (msg.type === 'progress') {
+                const percent = msg.percent;
+                $('#progressFill').css('width', percent + '%');
+                $('#progressText').text(`Checking ${msg.current}/${msg.total}: ${msg.name}... (${percent}%)`);
+            } else if (msg.type === 'result') {
+                // Append result to table in real-time
+                appendResult(msg.result);
+            } else if (msg.type === 'complete') {
+                window.eventSource.close();
+                window.eventSource = null;
+                $('#progressFill').css('width', '100%');
+                $('#searchBtn').prop('disabled', false);
+                $('#cancelBtn').hide();
+
+                if (!msg.success) {
+                    if (rows.length === 0) {
+                        $('#resultsBody').html('<tr><td colspan="6" style="text-align: center; color: red;">Error: ' + esc(msg.error) + '</td></tr>');
                         $('#resultsCount').text('');
+                    } else {
+                        $('#resultsCount').text(rows.length + ' result' + (rows.length !== 1 ? 's' : '') + ' (stopped early - Error: ' + msg.error + ')');
                     }
-                },
-                error: function(xhr, status, error) {
-                    clearInterval(progressInterval);
-                    $('#progressFill').css('width', '100%');
-                    $('#resultsBody').html('<tr><td colspan="6" style="text-align: center; color: red;">Error: ' + error + '</td></tr>');
-                    $('#resultsCount').text('');
-                },
-                complete: function() {
-                    $('#searchBtn').prop('disabled', false);
-                    setTimeout(function() {
-                        $('#progressBar').hide();
-                        $('#progressText').hide();
-                    }, 1000);
+                } else {
+                    // Rows arrive in roster order; sort them cheapest first now that all are in
+                    // (this also shows the "none found" message when nothing survived).
+                    displayResults(rows);
                 }
-            });
-        });
+
+                setTimeout(function() {
+                    $('#progressBar').hide();
+                    $('#progressText').hide();
+                }, 1000);
+            }
+        };
+
+        window.eventSource.onerror = function() {
+            if (!window.eventSource) {
+                return;  // already closed by 'complete' or Cancel
+            }
+            window.eventSource.close();
+            window.eventSource = null;
+            finishSearch();
+            $('#resultsBody').html('<tr><td colspan="6" style="text-align: center; color: red;">Connection error</td></tr>');
+        };
+    }
+
+    function rowHtml(result) {
+        const ability = result.ability || 'Any';
+        return `
+            <tr>
+                <td>${esc(result.name)}</td>
+                <td>${result.points}</td>
+                <td>${result.hp_invest}</td>
+                <td>${result.defender_invest}</td>
+                <td class="${ability === 'Any' ? 'ability-not-required' : ''}">${esc(ability)}</td>
+                <td>${window.bulkResultDescription(result.desc, fairyAuraActive)}</td>
+            </tr>
+        `;
+    }
+
+    function appendResult(result) {
+        rows.push(result);
+        $('#resultsCount').text(rows.length + ' result' + (rows.length !== 1 ? 's' : ''));
+        $('#resultsBody').append(rowHtml(result));
     }
 
     function displayResults(results) {
@@ -221,20 +296,6 @@ $(document).ready(function() {
             return a.points - b.points;
         });
 
-        let html = '';
-        results.forEach(result => {
-            html += `
-                <tr>
-                    <td>${result.name}</td>
-                    <td>${result.points}</td>
-                    <td>${result.hp_invest}</td>
-                    <td>${result.def_invest}</td>
-                    <td>${result.ability}</td>
-                    <td>${result.desc}</td>
-                </tr>
-            `;
-        });
-
-        $('#resultsBody').html(html);
+        $('#resultsBody').html(results.map(rowHtml).join(''));
     }
 });

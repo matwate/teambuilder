@@ -17,6 +17,7 @@ dependencies = [
 teambuilder = "teambuilder.main:app"
 build_db = "teambuilder.data:build"
 demo = "teambuilder.demo:main"
+test = "teambuilder.test_runner:main"
 web = "teambuilder.web_server:run_web"
 
 [build-system]

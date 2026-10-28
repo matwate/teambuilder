@@ -1,11 +1,21 @@
 import sys
+import unittest
+
 sys.path.insert(0, 'src')
+
 from teambuilder.damage import can_ko_any_atk
 from teambuilder.pokedex import search_names
 
-candidates = search_names()[:50]
-filter_obj = can_ko_any_atk('Charizard-Mega Y', only_super_effective=True)
-results = filter_obj.run(candidates)
-print('Results from first 50:', len(results))
-for name, inv in results.items():
-    print(f'{name}: {inv[0].move} ({inv[0].points} points)')
+
+class KoAnyAtkRegressionTests(unittest.TestCase):
+    def test_can_ko_any_atk_returns_results_on_a_small_sample(self):
+        candidates = search_names()[:10]
+        filter_obj = can_ko_any_atk('Charizard-Mega Y', only_super_effective=True)
+        results = filter_obj.run(candidates)
+
+        self.assertTrue(results)
+        self.assertLessEqual(len(results), len(candidates))
+
+
+if __name__ == '__main__':
+    unittest.main()

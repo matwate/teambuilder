@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width" />
+		<title>{% block page_title %}Pok&eacute;mon Team Builder{% endblock %}</title>
+		<link rel="icon" type="image/x-icon" href="/static/img/favicon.png" />
+		<link
+			type="text/css"
+			rel="stylesheet"
+			href="/static/js/vendor/select2/select2.css"
+		/>
+		<link type="text/css" rel="stylesheet" href="/static/css/main.css?" />
+		<link
+			type="text/css"
+			rel="stylesheet"
+			href="/static/css/vendor/bootstrap.css"
+		/>
+		<link
+			type="text/css"
+			rel="stylesheet"
+			href="/static/css/dark-theme.css?"
+			id="dark-theme-styles"
+		/>
+		{% block page_styles %}{% endblock %}
+		<link type="text/css" rel="stylesheet" href="/static/css/bulk_common.css" />
+		<script type="text/javascript" src="/static/js/theme-init.js"></script>
+	</head>
+
+	<body class="dark-theme">
+		<div class="wrapper">
+			<div class="header-section">
+				<span class="title-text main-title-text">
+					{% block page_heading %}Pok&eacute;mon Team Builder{% endblock %}
+				</span>
+				<div aria-label="Navigation" role="region">
+					<span
+						class="modeSelection"
+						role="radiogroup"
+						title="Navigate to different tools."
+					>
+						<input
+							class="mode visually-hidden"
+							type="radio"
+							name="page"
+							id="page-calculator"
+							{% if request.path == '/' %}checked="checked"{% endif %}
+						/><label class="btn btn-left btn-wide" for="page-calculator">Calculator</label>
+						<input
+							class="mode visually-hidden"
+							type="radio"
+							name="page"
+							id="page-search"
+							{% if request.path == '/search' %}checked="checked"{% endif %}
+						/><label class="btn btn-mid btn-wide" for="page-search">Search</label>
+						<input
+							class="mode visually-hidden"
+							type="radio"
+							name="page"
+							id="page-bulk-ko"
+							{% if request.path == '/bulk-ko' %}checked="checked"{% endif %}
+						/><label class="btn btn-mid btn-wide" for="page-bulk-ko">Bulk KO</label>
+						<input
+							class="mode visually-hidden"
+							type="radio"
+							name="page"
+							id="page-bulk-survive"
+							{% if request.path == '/bulk-survive' %}checked="checked"{% endif %}
+						/><label class="btn btn-right btn-wide" for="page-bulk-survive">Bulk Survive</label>
+					</span>
+				</div>
+				{% block page_settings %}{% endblock %}
+			</div>
+			<hr />
+			{% block page_content %}{% endblock %}
+		</div>
+
+		<script src="/static/js/vendor/jquery-1.9.1.min.js"></script>
+		<script src="/static/js/vendor/select2/select2.min.js"></script>
+		{% block page_scripts %}{% endblock %}
+	</body>
+</html>

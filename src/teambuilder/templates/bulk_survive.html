@@ -1,76 +1,44 @@
-<!doctype html>
-<html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width" />
-		<title>Bulk Survival Finder</title>
-		<link rel="icon" type="image/x-icon" href="/static/img/favicon.png" />
-		<link
-			type="text/css"
-			rel="stylesheet"
-			href="/static/js/vendor/select2/select2.css"
-		/>
-		<link type="text/css" rel="stylesheet" href="/static/css/main.css?" />
-		<link
-			type="text/css"
-			rel="stylesheet"
-			href="/static/css/vendor/bootstrap.css"
-		/>
-		<link
-			type="text/css"
-			rel="stylesheet"
-			href="/static/css/dark-theme.css?"
-			id="dark-theme-styles"
-		/>
-		<script
-			type="text/javascript"
-			src="/static/js/theme-init.js"
-		></script>
+{% extends "_tool_page.html" %}
+
+{% block page_title %}Bulk Survival Finder{% endblock %}
+{% block page_heading %}Bulk Survival Finder{% endblock %}
+{% block page_styles %}
 		<link type="text/css" rel="stylesheet" href="/static/css/bulk_survive.css" />
-	</head>
+{% endblock %}
 
-	<body class="dark-theme">
-		<div class="wrapper">
-			<div class="header-section">
-				<span class="title-text main-title-text">Bulk Survival Finder</span>
-				<div aria-label="Navigation" role="region">
-					<span class="modeSelection" role="radiogroup">
-						<input
-							class="mode visually-hidden"
-							type="radio"
-							name="page"
-							id="page-calculator"
-						/><label class="btn btn-left btn-wide" for="page-calculator">Calculator</label>
-						<input
-							class="mode visually-hidden"
-							type="radio"
-							name="page"
-							id="page-search"
-						/><label class="btn btn-mid btn-wide" for="page-search">Search</label>
-						<input
-							class="mode visually-hidden"
-							type="radio"
-							name="page"
-							id="page-bulk-ko"
-						/><label class="btn btn-mid btn-wide" for="page-bulk-ko">Bulk KO</label>
-						<input
-							class="mode visually-hidden"
-							type="radio"
-							name="page"
-							id="page-bulk-survive"
-							checked="checked"
-						/><label class="btn btn-right btn-wide" for="page-bulk-survive">Bulk Survive</label>
-					</span>
+{% block page_content %}
+
+			<div class="bulk-results">
+				<div class="progress-bar" id="progressBar">
+					<div class="progress-fill" id="progressFill"></div>
 				</div>
+				<div class="progress-text" id="progressText">Processing...</div>
+				<div class="results-count" id="resultsCount"></div>
+				<table class="result-table">
+					<thead>
+						<tr>
+							<th>Pokemon</th>
+							<th>Total Points</th>
+							<th>HP</th>
+							<th>Def</th>
+							<th>Required Ability</th>
+							<th>Description</th>
+						</tr>
+					</thead>
+					<tbody id="resultsBody">
+						<tr>
+							<td colspan="6" style="text-align: center;">Configure attacker and click Find Defenders</td>
+						</tr>
+					</tbody>
+				</table>
 			</div>
-			<hr />
 
-			<div class="bulk-container">
-				<div class="bulk-sidebar">
-					<div class="filter-section">
-						<h3>Attacker</h3>
+			<div class="tool-input-layout">
+				<div aria-label="Attacker Options" class="panel tool-panel" role="region">
+					<fieldset class="bulk-options poke-info tool-options">
+						<legend align="center">Attacker Options</legend>
 						<div class="filter-group">
-							<label for="attacker">Pokemon</label>
+							<label for="attacker">Pok&eacute;mon</label>
 							<select id="attacker"></select>
 						</div>
 						<div class="filter-group">
@@ -85,33 +53,38 @@
 							<label for="attacker_ability">Ability</label>
 							<select id="attacker_ability" class="ability"></select>
 						</div>
-					</div>
-
-					<div class="filter-section">
-						<h3>Attacker EVs</h3>
 						<div class="filter-group">
-							<label for="attacker_evs">Attacking Stat Investment</label>
-							<input type="text" id="attacker_evs" value="32" placeholder="e.g., 32, 32+, 32-" />
-							<small style="color: #888;">(Add + for +nature, - for -nature)</small>
+							<label for="attacker_evs">Atk / SpA</label>
+							<input type="text" id="attacker_evs" value="0" placeholder="e.g. 32+" />
+							<small class="subtext">(Add + for +nature, - for -nature)</small>
 						</div>
-					</div>
+					</fieldset>
+				</div>
 
-					<div class="filter-section">
-						<h3>Defender Options</h3>
+				{% with default_format="doubles" %}
+				{% include "_field_conditions.html" %}
+				{% endwith %}
+
+				<div aria-label="Defender Options" class="panel tool-panel" role="region">
+					<fieldset class="bulk-options poke-info tool-options">
+						<legend align="center">Defender Options</legend>
 						<div class="filter-group">
-							<label for="defender_item">Defender Item (optional)</label>
+							<label for="defender_item">Item (optional)</label>
 							<select id="defender_item" class="item"></select>
 						</div>
 						<div class="filter-group">
 							<label for="survival_percent">Survival Threshold (%)</label>
 							<input type="number" id="survival_percent" value="100" min="0" max="100" />
 						</div>
-					</div>
-
-					<div class="filter-section">
-						<h3>Defender Filters (Optional)</h3>
 						<div class="filter-group">
-							<label for="filter_type1">Type 1</label>
+							<label for="defender_nature">Defensive Nature</label>
+							<select id="defender_nature">
+								<option value="1.0">Neutral</option>
+								<option value="1.1">+10% to the targeted defense</option>
+							</select>
+						</div>
+						<div class="filter-group">
+							<label for="filter_type1">Type 1 (optional)</label>
 							<select id="filter_type1">
 								<option value="">Any</option>
 								<option value="Normal">Normal</option>
@@ -135,51 +108,25 @@
 							</select>
 						</div>
 						<div class="filter-group">
-							<label for="filter_ability">Can Have Ability</label>
+							<label for="filter_ability">Can Have Ability (optional)</label>
 							<select id="filter_ability"></select>
 						</div>
 						<div class="filter-group">
-							<label for="filter_min_bst">Min BST</label>
+							<label for="filter_min_bst">Min BST (optional)</label>
 							<input type="number" id="filter_min_bst" placeholder="e.g., 500" min="0" max="720" />
 						</div>
 						<div class="filter-group">
-							<label for="filter_min_hp">Min HP</label>
+							<label for="filter_min_hp">Min HP (optional)</label>
 							<input type="number" id="filter_min_hp" placeholder="e.g., 100" min="0" max="255" />
 						</div>
-					</div>
-
-					<button class="search-btn" id="searchBtn">Find Defenders</button>
-				</div>
-
-				<div class="bulk-results">
-					<div class="progress-bar" id="progressBar">
-						<div class="progress-fill" id="progressFill"></div>
-					</div>
-					<div class="progress-text" id="progressText">Processing...</div>
-					<div class="results-count" id="resultsCount"></div>
-					<table class="results-table">
-						<thead>
-							<tr>
-								<th>Pokemon</th>
-								<th>Total Points</th>
-								<th>HP Investment</th>
-								<th>Defense Investment</th>
-								<th>Best Ability</th>
-								<th>Description</th>
-							</tr>
-						</thead>
-						<tbody id="resultsBody">
-							<tr>
-								<td colspan="6" style="text-align: center;">Configure attacker and click Find Defenders</td>
-							</tr>
-						</tbody>
-					</table>
+					</fieldset>
+					<button class="btn btn-wide bulk-calculate" id="searchBtn">Find Defenders</button>
+					<button class="search-btn cancel" id="cancelBtn" style="display: none;">Cancel</button>
 				</div>
 			</div>
-		</div>
+{% endblock %}
 
-		<script src="/static/js/vendor/jquery-1.9.1.min.js"></script>
-		<script src="/static/js/vendor/select2/select2.min.js"></script>
+{% block page_scripts %}
+		<script src="/static/js/bulk_common.js"></script>
 		<script src="/static/js/bulk_survive.js"></script>
-	</body>
-</html>
+{% endblock %}

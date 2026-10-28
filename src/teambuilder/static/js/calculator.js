@@ -2,7 +2,49 @@ $(document).ready(function () {
 	let lastResults = null; // results from the most recent calculation
 	let currentMoveCategory = null; // track current move category
 	let isLoadingMoveCategory = false; // track if we're loading move category
-	let currentCalculator = "ko"; // "ko" or "survival"
+
+	const calculators = {KO: "ko", SURVIVAL: "survival"};
+	let currentCalculator = calculators.KO; //initialize as KO calculator
+
+	function setupCalculator(calculator) {
+		const isKoCalculator = calculator === calculators.KO;
+		currentCalculator = calculator;
+		
+		// Attacker nature
+		isKoCalculator ? $("#attacker-nature-header").show() : $("#attacker-nature-header").hide();
+		isKoCalculator ? $("#attacker-nature-input").show() : $("#attacker-nature-input").hide();
+
+		// Attacker EVs
+		isKoCalculator ? $("#attacker-evs-header").hide() : $("#attacker-evs-header").show();
+		isKoCalculator ? $("#attacker-evs-input").hide() : $("#attacker-evs-input").show();
+
+		// +/- nature Notes
+		isKoCalculator ? $("#attacker-note-survival").hide() : $("#attacker-note-survival").show();
+		isKoCalculator ? $("#defender-note-survival").show() : $("#defender-note-survival").hide();
+
+		// Defender HP
+		isKoCalculator ? $("#defender-hp-header").show() : $("#defender-hp-header").hide();
+		isKoCalculator ? $("#defender-hp-input").show() : $("#defender-hp-input").hide();
+
+		// Defender EVs
+		isKoCalculator ? $("#defender-evs-header").show() : $("#defender-evs-header").hide();
+		isKoCalculator ? $("#defender-evs-input").show() : $("#defender-evs-input").hide();
+
+		// Defender nature
+		isKoCalculator ? $("#defender-nature-header").hide() : $("#defender-nature-header").show();
+		isKoCalculator ? $("#defender-nature-input").hide() : $("#defender-nature-input").show();
+
+		$("#mainResult").text("Select Pokemon and Move to Calculate");
+		$("#resultTable").empty();
+		$("#calcHeader").text("");
+		lastResults = null;		
+	}
+
+	// Setup the initial state of the calculator
+	$("#survival-calc").prop("checked", false);
+	$("#ko-calc").prop("checked", true);
+	$("#allResults").prop("checked", true);
+	setupCalculator(calculators.KO);
 
 	// Page navigation handlers
 	$('#page-calculator').change(function() {
@@ -29,69 +71,6 @@ $(document).ready(function () {
 		}
 	});
 
-	// Mega stone mapping - shared between attacker and defender
-	const megaStoneMap = {
-		"Dragonite-Mega": "Dragoninite",
-		"Gyarados-Mega": "Gyaradosite",
-		"Charizard-Mega X": "Charizardite X",
-		"Charizard-Mega Y": "Charizardite Y",
-		"Mewtwo-Mega X": "Mewtwonite X",
-		"Mewtwo-Mega Y": "Mewtwonite Y",
-		"Absol-Mega": "Absolite",
-		"Aerodactyl-Mega": "Aerodactylite",
-		"Aggron-Mega": "Aggronite",
-		"Alakazam-Mega": "Alakazite",
-		"Ampharos-Mega": "Ampharosite",
-		"Banette-Mega": "Banettite",
-		"Beedrill-Mega": "Beedrillite",
-		"Blastoise-Mega": "Blastoisinite",
-		"Blaziken-Mega": "Blazikenite",
-		"Camerupt-Mega": "Cameruptite",
-		"Chandelure-Mega": "Chandelurite",
-		"Charizard-Mega": "Charizardite",
-		"Diancie-Mega": "Diancite",
-		"Gallade-Mega": "Galladite",
-		"Garchomp-Mega": "Garchompite",
-		"Gardevoir-Mega": "Gardevoirite",
-		"Gengar-Mega": "Gengarite",
-		"Glalie-Mega": "Glalitite",
-		"Greninja-Mega": "Greninjite",
-		"Gyarados-Mega": "Gyaradosite",
-		"Heracross-Mega": "Heracronite",
-		"Houndoom-Mega": "Houndoominite",
-		"Kangaskhan-Mega": "Kangaskhanite",
-		"Lopunny-Mega": "Lopunnite",
-		"Lucario-Mega": "Lucarionite",
-		"Manectric-Mega": "Manectrite",
-		"Mawile-Mega": "Mawilite",
-		"Medicham-Mega": "Medichamite",
-		"Metagross-Mega": "Metagrossite",
-		"Pidgeot-Mega": "Pidgeotite",
-		"Pinsir-Mega": "Pinsirite",
-		"Sableye-Mega": "Sablenite",
-		"Salamence-Mega": "Salamencite",
-		"Sceptile-Mega": "Sceptilite",
-		"Scizor-Mega": "Scizorite",
-		"Sharpedo-Mega": "Sharpedonite",
-		"Slowbro-Mega": "Slowbronite",
-		"Steelix-Mega": "Steelixite",
-		"Tyranitar-Mega": "Tyranitarite",
-		"Venusaur-Mega": "Venusaurite"
-	};
-
-	// Helper function to auto-select mega stone
-	function autoSelectMegaStone(pokemon, $itemSelect) {
-		if (pokemon.includes("-Mega")) {
-			const megaStone = megaStoneMap[pokemon];
-			if (megaStone) {
-				const $itemOption = $itemSelect.find(`option[value="${megaStone}"]`);
-				if ($itemOption.length > 0) {
-					$itemSelect.val(megaStone).trigger("change");
-				}
-			}
-		}
-	}
-
 	// Helper function to initialize Select2
 	function initSelect2($element, placeholder, options = {}) {
 		const defaultOptions = {
@@ -110,24 +89,11 @@ $(document).ready(function () {
 			$element.append($("<option>", { value: emptyOption.value, text: emptyOption.text }));
 		}
 		items.forEach((item) => {
+			if (emptyOption && item === emptyOption.value) return;
 			const text = item === "" ? "None" : item;
 			$element.append($("<option>", { value: item, text: text }));
 		});
 	}
-
-	// Mapping of abilities to their weather/terrain effects
-	const abilityToFieldEffect = {
-		// Weather abilities
-		"Drought": "Sun",
-		"Drizzle": "Rain",
-		"Sand Stream": "Sand",
-		"Snow Warning": "Snow",
-		// Terrain abilities
-		"Electric Surge": "Electric",
-		"Grassy Surge": "Grassy",
-		"Misty Surge": "Misty",
-		"Psychic Surge": "Psychic",
-	};
 
 	// Helper function to collect checkbox values
 	function collectCheckboxValues(selector) {
@@ -141,24 +107,6 @@ $(document).ready(function () {
 	// Helper function to get radio value or default
 	function getRadioValue(name, defaultValue = "") {
 		return $(`input[name="${name}"]:checked`).val() || defaultValue;
-	}
-
-	// Helper function to set weather/terrain based on ability
-	function setFieldEffectFromAbility(ability) {
-		const effect = abilityToFieldEffect[ability];
-		if (!effect) return;
-
-		// Check if it's a weather or terrain effect
-		const weatherEffects = ["Sun", "Rain", "Sand", "Snow"];
-		const terrainEffects = ["Electric", "Grassy", "Misty", "Psychic"];
-
-		if (weatherEffects.includes(effect)) {
-			// Set weather radio button
-			$(`input[name="weather"][value="${effect}"]`).prop("checked", true);
-		} else if (terrainEffects.includes(effect)) {
-			// Set terrain radio button
-			$(`input[name="terrain"][value="${effect}"]`).prop("checked", true);
-		}
 	}
 
 	// Helper function to load and populate abilities
@@ -184,11 +132,7 @@ $(document).ready(function () {
 		const minPoints = Math.min(...lastResults.map((r) => r.points));
 		$("#mainResult").text(minPoints + " points");
 
-		// Minimum Only hides everything above the minimum (only for survival calculator)
-		const showAll = $("#allResults").is(":checked");
-		const rows = showAll
-			? lastResults
-			: lastResults.filter((r) => r.points === minPoints);
+		const rows = lastResults
 
 		if (currentCalculator === "ko") {
 			// For KO calculator, we show attacking stat investment
@@ -275,37 +219,13 @@ $(document).ready(function () {
 	// Toggle between KO and Survival calculators
 	$("#ko-calc").on("change", function () {
 		if ($(this).is(":checked")) {
-			currentCalculator = "ko";
-			$("#ko-threshold").show();
-			$("#survival-threshold").hide();
-			$("#survival-results-toggle").hide();
-			$("#attacker-stats-ko").show();
-			$("#attacker-stats-survival").hide();
-			$("#attacker-note-survival").hide();
-			$("#defender-stats-ko").show();
-			$("#defender-stats-survival").hide();
-			$("#mainResult").text("Select Pokemon and Move to Calculate");
-			$("#resultTable").empty();
-			$("#calcHeader").text("");
-			lastResults = null;
+			setupCalculator(calculators.KO);
 		}
 	});
 
 	$("#survival-calc").on("change", function () {
 		if ($(this).is(":checked")) {
-			currentCalculator = "survival";
-			$("#ko-threshold").hide();
-			$("#survival-threshold").show();
-			$("#survival-results-toggle").show();
-			$("#attacker-stats-ko").hide();
-			$("#attacker-stats-survival").show();
-			$("#attacker-note-survival").show();
-			$("#defender-stats-ko").hide();
-			$("#defender-stats-survival").show();
-			$("#mainResult").text("Select Pokemon and Move to Calculate");
-			$("#resultTable").empty();
-			$("#calcHeader").text("");
-			lastResults = null;
+			setupCalculator(calculators.SURVIVAL);
 		}
 	});
 
@@ -352,23 +272,34 @@ $(document).ready(function () {
 
 	// Load items
 	$.get("/api/items", function (items) {
-		populateDropdown($("#itemL1"), items);
-		populateDropdown($("#itemR1"), items);
+		populateDropdown($("#itemL1"), items, { value: "", text: "Select Item" });
+		populateDropdown($("#itemR1"), items, { value: "", text: "Select Item" });
 		$("#itemL1").val("").trigger("change");
 		$("#itemR1").val("").trigger("change");
+		$(".item").trigger("items-loaded");
 	});
 
 	// Load moves when attacker is selected
 	$("#attacker-input").on("change", function () {
 		const pokemon = $(this).val();
+		$("#move-select")
+			.empty()
+			.append($("<option>", { value: "", text: "Select Move" }))
+			.val("")
+			.trigger("change");
+		$("#itemL1").val("").trigger("change");
+		$("#abilityL1")
+			.empty()
+			.append($("<option>", { value: "", text: "Any" }))
+			.val("")
+			.trigger("change");
 		if (pokemon) {
 			$.get(
 				"/api/moves/" + encodeURIComponent(pokemon),
 				function (moves) {
-					populateDropdown($("#move-select"), moves, { value: "", text: "" });
+					populateDropdown($("#move-select"), moves, { value: "", text: "Select Move" });
 					$("#move-select").val("").trigger("change");
 					loadAbilities(pokemon, $("#abilityL1"));
-					autoSelectMegaStone(pokemon, $("#itemL1"));
 					updateCalcHeader();
 				}
 			);
@@ -404,25 +335,14 @@ $(document).ready(function () {
 	// Load defender abilities
 	$("#defender-input").on("change", function () {
 		const pokemon = $(this).val();
+		$("#itemR1").val("").trigger("change");
+		$("#abilityR1")
+			.empty()
+			.append($("<option>", { value: "", text: "Any" }))
+			.val("")
+			.trigger("change");
 		if (pokemon) {
 			loadAbilities(pokemon, $("#abilityR1"));
-			autoSelectMegaStone(pokemon, $("#itemR1"));
-		}
-	});
-
-	// Auto-set weather/terrain when attacker ability changes
-	$("#abilityL1").on("change", function () {
-		const ability = $(this).val();
-		if (ability) {
-			setFieldEffectFromAbility(ability);
-		}
-	});
-
-	// Auto-set weather/terrain when defender ability changes
-	$("#abilityR1").on("change", function () {
-		const ability = $(this).val();
-		if (ability) {
-			setFieldEffectFromAbility(ability);
 		}
 	});
 
@@ -465,9 +385,8 @@ $(document).ready(function () {
 
 		if (currentCalculator === "ko") {
 			const attackerNature = $("#attacker-nature").val();
-			const defenderHp = $("#def-hp").val();
-			const defenderDef = $("#def-def").val();
-			const defenderSpd = $("#def-spd").val();
+			const defenderHp = $("#defender-hp").val();
+			const defenderEvs = $("#defender-evs").val();
 
 			// Use ATK or SPA based on move category
 			let statText = "";
@@ -488,8 +407,7 @@ $(document).ready(function () {
 			// Add defender stats if any are non-zero
 			let defenderStats = [];
 			if (defenderHp && defenderHp != 0) defenderStats.push(`${defenderHp} HP`);
-			if (defenderDef && defenderDef != 0) defenderStats.push(`${defenderDef} Def`);
-			if (defenderSpd && defenderSpd != 0) defenderStats.push(`${defenderSpd} SpD`);
+			if (defenderEvs && defenderEvs != 0) defenderStats.push(`${defenderEvs} Def/SpD`);
 			if (defenderStats.length > 0) {
 				defenderText += ` (${defenderStats.join(", ")})`;
 			}
@@ -499,6 +417,7 @@ $(document).ready(function () {
 		} else {
 			// Survival calculator
 			const attackerEvs = $("#attacker-evs").val();
+			const defenderNature = $("#defender-nature").val();
 
 			// Use ATK or SPA based on move category
 			let evsText = attackerEvs;
@@ -509,6 +428,12 @@ $(document).ready(function () {
 
 			// Format move (without BP and type)
 			let moveText = move;
+
+			// Add defender nature if not neutral
+			if (defenderNature !== "1.0") {
+				const natureText = defenderNature === "1.1" ? "+" : "-";
+				defenderText = `${natureText}${defenderText}`;
+			}
 
 			const headerText = `${boostText}${evsText} ${attacker} ${moveText} vs. ${defenderText}${weatherText}`;
 			$("#calcHeader").text(headerText);
@@ -522,9 +447,9 @@ $(document).ready(function () {
 	$("#itemL1").on("change", updateCalcHeader);
 	$("#defender-input").on("change", updateCalcHeader);
 	$("#abilityR1").on("change", updateCalcHeader);
-	$("#def-hp").on("input", updateCalcHeader);
-	$("#def-def").on("input", updateCalcHeader);
-	$("#def-spd").on("input", updateCalcHeader);
+	$("#defender-hp").on("input", updateCalcHeader);
+	$("#defender-evs").on("input", updateCalcHeader);
+	$("#defender-nature").on("change", updateCalcHeader);
 	$('input[name="weather"]').on("change", updateCalcHeader);
 
 	// Remove error highlighting when user interacts with required fields
@@ -578,51 +503,43 @@ $(document).ready(function () {
 			attacker: attacker,
 			move: move,
 			defender: defender,
+			percent: parseFloat($("#percent").val()),
 			attacker_ability: $("#abilityL1").val(),
 			attacker_item: $("#itemL1").val(),
 			attacker_boost: $("#attacker-boost").val(),
+			defender_boost: $("#defender-boost").val(),
 			defender_ability: $("#abilityR1").val(),
 			defender_item: $("#itemR1").val(),
-			def_nature: $("#def-nature").val(),
-			spd_nature: $("#spd-nature").val(),
-			def_boost: $("#def-boost").val(),
-			spd_boost: $("#spd-boost").val(),
+			format: getRadioValue("format", "doubles"),
 			terrain: getRadioValue("terrain"),
 			weather: getRadioValue("weather"),
 			field: collectCheckboxValues('input[name="fieldState"]'),
-			spikesR: getRadioValue("spikesR", "0"),
-			isStealthRock: $("#srR").is(":checked"),
-			isReflect: $("#reflectR").is(":checked"),
-			isLightScreen: $("#lightScreenR").is(":checked"),
-			isAuroraVeil: $("#auroraVeilR").is(":checked"),
-			isFriendGuard: $("#friendGuardR").is(":checked"),
-			isProtect: $("#protectR").is(":checked"),
-			isLeechSeed: $("#leechSeedR").is(":checked"),
-			isSaltCure: $("#saltCureR").is(":checked"),
-			isCharge: $("#chargeR").is(":checked"),
-			isHelpingHand: $("#helpingHandR").is(":checked"),
-			isTailwind: $("#tailwindR").is(":checked"),
-			isPowerTrick: $("#powerTrickR").is(":checked"),
-			isStatBoost: $("#StatBoostR").is(":checked"),
-			isSwitching: $("#switchingR").is(":checked"),
+			spikes: getRadioValue("spikes", "0"),
+			isSR: $("#SR").is(":checked"),
+			isReflect: $("#reflect").is(":checked"),
+			isLightScreen: $("#lightScreen").is(":checked"),
+			isAuroraVeil: $("#auroraVeil").is(":checked"),
+			isFriendGuard: $("#friendGuard").is(":checked"),
+			isProtect: $("#protect").is(":checked"),
+			isLeechSeed: $("#leechSeed").is(":checked"),
+			isSaltCure: $("#saltCure").is(":checked"),
+			isCharge: $("#charge").is(":checked"),
+			isHelpingHand: $("#helpingHand").is(":checked"),
+			isPowerTrickLeft: $("#powerTrickL").is(":checked"),
+			isPowerTrickRight: $("#powerTrickR").is(":checked"),
 		};
 
 		if (currentCalculator === "ko") {
 			data.attacker_nature = $("#attacker-nature").val();
-			data.defender_hp = $("#def-hp").val();
-			data.defender_def = $("#def-def").val();
-			data.defender_spd = $("#def-spd").val();
-			data.percent = parseFloat($("#ko-percent").val());
-		} else {
+			data.defender_hp = $("#defender-hp").val();
+			data.defender_evs = $("#defender-evs").val();
+		} else { // survival
 			data.attacker_evs = $("#attacker-evs").val();
-			data.percent = parseFloat($("#survival-percent").val());
-			data.showAll = true; // Always calculate all results
+			data.defender_nature = $("#defender-nature").val();
 		}
 
 		console.log("Sending data:", data);
-
 		$("#mainResult").text("Calculating...");
-
 		const apiUrl = currentCalculator === "ko" ? "/api/ko-calculation" : "/api/survival";
 
 		$.ajax({

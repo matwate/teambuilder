@@ -1,0 +1,180 @@
+html,
+body {
+	min-width: 0;
+}
+
+.tool-input-layout {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 20px;
+	align-items: start;
+}
+.tool-input-layout > .panel,
+.tool-input-layout > .bulk-column {
+	float: none;
+	width: auto;
+	min-width: 0;
+	margin: 0;
+}
+.tool-input-layout .tool-options {
+	box-sizing: border-box;
+	width: 100%;
+	margin: 0;
+	padding: 15px;
+}
+.tool-input-layout .tool-options .info-group,
+.tool-input-layout .tool-options .filter-group {
+	display: block;
+	margin: 0 0 14px;
+}
+.tool-input-layout .tool-options .info-group > label,
+.tool-input-layout .tool-options .info-group > div > label,
+.tool-input-layout .tool-options .filter-group label {
+	display: block;
+	width: auto;
+	margin-bottom: 5px;
+}
+.tool-input-layout .tool-options > .set-selector,
+.tool-input-layout .tool-options .filter-group input,
+.tool-input-layout .tool-options .filter-group select {
+	box-sizing: border-box;
+	width: 100%;
+	padding: 5px;
+}
+.tool-input-layout .tool-options .select2-container {
+	width: 100% !important;
+}
+.tool-input-layout .tool-field-panel .field-info {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 100%;
+}
+.tool-input-layout .tool-field-panel .field-info [style*="width: 22.2em"] {
+	width: 100% !important;
+}
+
+.bulk-options {
+	box-sizing: border-box;
+	padding: 15px;
+}
+.bulk-options .info-group,
+.bulk-options .filter-group {
+	display: block;
+	margin: 0 0 14px;
+}
+.bulk-options .info-group label,
+.bulk-options .filter-group label {
+	display: block;
+	width: auto;
+	margin-bottom: 5px;
+}
+.bulk-options input:not([type="checkbox"]),
+.bulk-options select {
+	box-sizing: border-box;
+	width: 100%;
+	padding: 5px;
+}
+.bulk-options .select2-container {
+	width: 100% !important;
+}
+.bulk-calculate {
+	display: block;
+	box-sizing: border-box;
+	width: 100% !important;
+	margin: 0;
+	border: 0;
+	padding: 8px 10px;
+}
+.bulk-calculate:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+.search-btn.cancel {
+	width: 100%;
+	margin-top: 8px;
+	border: 0;
+	border-radius: 5px;
+	padding: 10px;
+	background: #f44336;
+	color: white;
+	cursor: pointer;
+	font-size: 16px;
+}
+.search-btn.cancel:hover {
+	background: #d32f2f;
+}
+.search-btn.cancel:disabled {
+	background: #666;
+	cursor: not-allowed;
+}
+.results-count {
+	margin: 0 0 10px;
+	font-size: 0.8em;
+}
+
+.bulk-results .result-table,
+.results-section .result-table {
+	width: 100%;
+	table-layout: fixed;
+}
+.bulk-results .result-table th,
+.bulk-results .result-table td,
+.results-section .result-table th,
+.results-section .result-table td {
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+.bulk-results .result-table th,
+.results-section .result-table th {
+	opacity: 1;
+	font-weight: normal;
+	color: inherit;
+}
+.bulk-results .result-table td,
+.results-section .result-table td {
+	color: inherit;
+}
+.bulk-results .result-table th:nth-child(1),
+.bulk-results .result-table th:nth-child(2),
+.bulk-results .result-table td:nth-child(1),
+.bulk-results .result-table td:nth-child(2) {
+	font-weight: bold;
+}
+.bulk-results .result-table th:nth-child(n + 3),
+.bulk-results .result-table td:nth-child(n + 3),
+.results-section .result-table th,
+.results-section .result-table td {
+	font-size: inherit;
+}
+.bulk-results .result-table th:nth-child(n + 3),
+.bulk-results .result-table td:nth-child(n + 3) {
+	font-weight: normal;
+}
+.bulk-results .result-table th:nth-child(1) { width: 15%; }
+.bulk-results .result-table th:nth-child(2) { width: 12%; }
+.bulk-results .result-table th:nth-child(3),
+.bulk-results .result-table th:nth-child(4) { width: 7%; }
+.bulk-results .result-table th:nth-child(5) { width: 15%; }
+.bulk-results .result-table th:nth-child(6) { width: 44%; }
+.results-section .result-table th:nth-child(1) { width: 17%; }
+.results-section .result-table th:nth-child(2) { width: 13%; }
+.results-section .result-table th:nth-child(3) { width: 15%; }
+.results-section .result-table th:nth-child(4) { width: 15%; }
+.results-section .result-table th:nth-child(5) { width: 40%; }
+.ability-not-required {
+	color: #999 !important;
+}
+.field-condition-note {
+	color: #999;
+	font-size: 0.9em;
+}
+
+@media (max-width: 700px) {
+	.tool-input-layout {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.tool-input-layout > .tool-field-panel {
+		grid-column: 1;
+		grid-row: auto;
+	}
+}

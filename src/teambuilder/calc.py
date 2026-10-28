@@ -5,6 +5,7 @@ import subprocess
 import threading
 from functools import cache
 from pathlib import Path
+from typing import overload
 
 ROOT = Path(__file__).resolve().parents[2]
 CALC_JS = ROOT / "calc.js"
@@ -50,6 +51,14 @@ def move_category(move: str, gen: int = DEFAULT_GEN) -> str | None:
 def move_type(move: str, gen: int = DEFAULT_GEN) -> str | None:
     """The type of a move, or None if the move is not in `gen`."""
     return _move_types(gen).get(_to_id(move))
+
+
+@overload
+def calculate(request: dict) -> dict: ...
+
+
+@overload
+def calculate(request: list[dict]) -> list[dict]: ...
 
 
 def calculate(request: dict | list[dict]) -> dict | list[dict]:
@@ -139,6 +148,7 @@ def build_request(
         "field": {"gameType": "Doubles", **(field_opts or {})},
     }
 
+
     # Add side conditions if provided
     if defender_side:
         request["defenderSide"] = defender_side
@@ -191,10 +201,14 @@ def _served(lines: list[str]) -> list[dict] | None:
                     stderr=subprocess.DEVNULL,
                 )
             responses = []
+            stdin = _server.stdin
+            stdout = _server.stdout
+            if stdin is None or stdout is None:
+                raise BrokenPipeError
             for line in lines:
-                _server.stdin.write(line + "\n")
-                _server.stdin.flush()
-                answer = _server.stdout.readline()
+                stdin.write(line + "\n")
+                stdin.flush()
+                answer = stdout.readline()
                 if not answer:
                     raise BrokenPipeError
                 responses.append(json.loads(answer))

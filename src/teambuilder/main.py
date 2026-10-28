@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 
 import typer
 
@@ -213,7 +214,7 @@ def _json(text: str, option: str) -> dict:
     return value
 
 
-def _stat_filter(make: "callable", spec: str) -> Filter:
+def _stat_filter(make: Callable[..., Filter], spec: str) -> Filter:
     stat, _, value = spec.partition("=")
     if not value:
         raise typer.BadParameter(f"expected stat=value, got {spec!r}")

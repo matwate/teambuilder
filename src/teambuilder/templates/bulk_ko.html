@@ -1,1123 +1,210 @@
-<!doctype html>
-<html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width" />
-		<title>Bulk KO Finder</title>
-		<link rel="icon" type="image/x-icon" href="/static/img/favicon.png" />
-		<link
-			type="text/css"
-			rel="stylesheet"
-			href="/static/js/vendor/select2/select2.css"
-		/>
-		<link type="text/css" rel="stylesheet" href="/static/css/main.css?" />
-		<link
-			type="text/css"
-			rel="stylesheet"
-			href="/static/css/vendor/bootstrap.css"
-		/>
-		<link
-			type="text/css"
-			rel="stylesheet"
-			href="/static/css/dark-theme.css?"
-			id="dark-theme-styles"
-		/>
-		<script
-			type="text/javascript"
-			src="/static/js/theme-init.js"
-		></script>
-		<link type="text/css" rel="stylesheet" href="/static/css/bulk_ko.css" />
-	</head>
+{% extends "_tool_page.html" %} {% block page_title %}Bulk KO Finder{% endblock
+%} {% block page_heading %}Bulk KO Finder{% endblock %} {% block page_styles %}
+<link type="text/css" rel="stylesheet" href="/static/css/bulk_ko.css" />
+{% endblock %} {% block page_content %}
 
-	<body class="dark-theme">
-		<div class="wrapper">
-			<div class="header-section">
-				<span class="title-text main-title-text">Bulk KO Finder</span>
-				<div aria-label="Navigation" role="region">
-					<span class="modeSelection" role="radiogroup">
-						<input
-							class="mode visually-hidden"
-							type="radio"
-							name="page"
-							id="page-calculator"
-						/><label class="btn btn-left btn-wide" for="page-calculator">Calculator</label>
-						<input
-							class="mode visually-hidden"
-							type="radio"
-							name="page"
-							id="page-search"
-						/><label class="btn btn-mid btn-wide" for="page-search">Search</label>
-						<input
-							class="mode visually-hidden"
-							type="radio"
-							name="page"
-							id="page-bulk-ko"
-							checked="checked"
-						/><label class="btn btn-mid btn-wide" for="page-bulk-ko">Bulk KO</label>
-						<input
-							class="mode visually-hidden"
-							type="radio"
-							name="page"
-							id="page-bulk-survive"
-						/><label class="btn btn-right btn-wide" for="page-bulk-survive">Bulk Survive</label>
-					</span>
-				</div>
-			</div>
-			<hr />
+<div class="results-section">
+  <div class="progress-bar" id="progressBar">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+  <div class="progress-text" id="progressText">Processing...</div>
+  <div class="results-count" id="resultsCount"></div>
+  <table class="result-table">
+    <thead>
+      <tr>
+        <th>Pokémon</th>
+        <th>Points Needed</th>
+        <th>Best Move</th>
+        <th>Ability Required</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody id="resultsBody">
+      <tr>
+        <td colspan="5" style="text-align: center">
+          Select a defender and click Find Attackers
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
 
-			<div class="results-section">
-				<div class="progress-bar" id="progressBar">
-					<div class="progress-fill" id="progressFill"></div>
-				</div>
-				<div class="progress-text" id="progressText">Processing...</div>
-				<div class="results-count" id="resultsCount"></div>
-				<table class="results-table">
-					<thead>
-						<tr>
-							<th>Pokemon</th>
-							<th>Points Needed</th>
-							<th>Best Move</th>
-							<th>Ability Required</th>
-							<th>Description</th>
-						</tr>
-					</thead>
-					<tbody id="resultsBody">
-						<tr>
-							<td colspan="5" style="text-align: center;">Select a defender and click Find Attackers</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
+<div class="tool-input-layout">
+  <div aria-label="Attacker Filters" class="panel tool-panel" role="region">
+    <fieldset class="poke-info bulk-options tool-options" id="p1">
+      <legend align="center">Attacker</legend>
 
-			<div aria-label="Attacker Filters" class="panel" role="region">
-				<fieldset class="poke-info" id="p1">
-					<legend align="center">Attacker Filters</legend>
+      <div class="info-group">
+				<label for="filter_type1">Type</label>
+				<select id="filter_type1">
+					<option value="">Any</option>
+					<option value="Normal">Normal</option>
+					<option value="Fire">Fire</option>
+					<option value="Water">Water</option>
+					<option value="Electric">Electric</option>
+					<option value="Grass">Grassy</option>
+					<option value="Ice">Ice</option>
+					<option value="Fighting">Fighting</option>
+					<option value="Poison">Poison</option>
+					<option value="Ground">Ground</option>
+					<option value="Flying">Flying</option>
+					<option value="Psychic">Psychic</option>
+					<option value="Bug">Bug</option>
+					<option value="Rock">Rock</option>
+					<option value="Ghost">Ghost</option>
+					<option value="Dragon">Dragon</option>
+					<option value="Dark">Dark</option>
+					<option value="Steel">Steel</option>
+					<option value="Fairy">Fairy</option>
+				</select>
+      </div>
 
-					<div class="info-group">
-						<div>
-							<label for="filter_type1">Type 1</label>
-							<select id="filter_type1">
-								<option value="">Any</option>
-								<option value="Normal">Normal</option>
-								<option value="Fire">Fire</option>
-								<option value="Water">Water</option>
-								<option value="Electric">Electric</option>
-								<option value="Grass">Grassy</option>
-								<option value="Ice">Ice</option>
-								<option value="Fighting">Fighting</option>
-								<option value="Poison">Poison</option>
-								<option value="Ground">Ground</option>
-								<option value="Flying">Flying</option>
-								<option value="Psychic">Psychic</option>
-								<option value="Bug">Bug</option>
-								<option value="Rock">Rock</option>
-								<option value="Ghost">Ghost</option>
-								<option value="Dragon">Dragon</option>
-								<option value="Dark">Dark</option>
-								<option value="Steel">Steel</option>
-								<option value="Fairy">Fairy</option>
-							</select>
-						</div>
-					</div>
+      <div class="info-group">
+        <label for="filter_min_bst">Min BST</label>
+        <input
+          type="number"
+          id="filter_min_bst"
+          placeholder="500"
+          min="0"
+          max="720"
+        />
+      </div>
 
-					<div class="info-group">
-						<label for="filter_min_bst">Min BST</label>
-						<input type="number" id="filter_min_bst" placeholder="500" min="0" max="720" />
-					</div>
+      <div class="info-group">
+        <label for="filter_min_spe">Min Speed</label>
+        <input
+          type="number"
+          id="filter_min_spe"
+          placeholder="100"
+          min="0"
+          max="255"
+        />
+      </div>
 
-					<div class="info-group">
-						<label for="filter_min_spe">Min Speed</label>
-						<input type="number" id="filter_min_spe" placeholder="100" min="0" max="255" />
-					</div>
+      <div class="info-group">
+        <label for="move">Target Move</label>
+        <select id="move"></select>
+      </div>
 
-					<div class="info-group">
-						<label for="move">Target Move</label>
-						<select id="move"></select>
-					</div>
+      <div class="info-group">
+        <label for="attacker_item">Attacker Item</label>
+        <select id="attacker_item" class="item"></select>
+      </div>
 
-					<div class="info-group">
-						<label for="attacker_item">Attacker Item</label>
-						<select id="attacker_item" class="item"></select>
-					</div>
+      <div class="info-group">
+        <label for="ko_percent">KO Threshold (%)</label>
+        <input type="number" id="ko_percent" value="100" min="0" max="100" />
+      </div>
 
-					<div class="info-group">
-						<label for="ko_percent">KO Threshold (%)</label>
-						<input type="number" id="ko_percent" value="100" min="0" max="100" />
-					</div>
+      <div class="info-group">
+        <label for="attacker_nature">Offensive Nature</label>
+        <select id="attacker_nature">
+          <option value="1.0">Neutral</option>
+          <option value="1.1">+10% to the targeted attack</option>
+        </select>
+      </div>
 
-					<div class="info-group">
-						<label>
-							<input type="checkbox" id="only_super_effective" checked />
-							Only check super effective moves
-						</label>
-					</div>
+      <div class="info-group">
+        <label>
+          <input type="checkbox" id="only_super_effective" checked />
+          Only check super effective moves
+        </label>
+      </div>
 
-					<div class="info-group">
-						<button class="search-btn" id="searchBtn">Find Attackers</button>
-						<button class="search-btn cancel" id="cancelBtn" style="display: none;">Cancel</button>
-					</div>
-				</fieldset>
-			</div>
+      <div class="info-group">
+        <button class="btn btn-wide bulk-calculate" id="searchBtn">
+          Find Attackers
+        </button>
+        <button class="search-btn cancel" id="cancelBtn" style="display: none">
+          Cancel
+        </button>
+      </div>
+    </fieldset>
+  </div>
 
-			<div class="panel">
-				<div aria-label="Field information" role="region">
-					<fieldset class="field-info">
-						<legend align="center">Field</legend>
+  {% with default_format="doubles" %} {% include "_field_conditions.html" %} {%
+  endwith %}
 
-						<div
-							aria-labelledby="selectBattleFormatInstruction"
-							role="radiogroup"
-							style="width: 10.6em; margin: 0 auto 5px"
-							title="Select the battle format."
-						>
-							<span
-								class="visually-hidden"
-								id="selectBattleFormatInstruction"
-								>Select the battle format.</span
-							>
-							<input
-								class="visually-hidden"
-								type="radio"
-								name="format"
-								value="singles"
-								id="singles-format"
-							/>
-							<label class="btn btn-left" for="singles-format"
-								>Singles</label
-							>
-							<input
-								class="visually-hidden"
-								type="radio"
-								name="format"
-								value="doubles"
-								id="doubles-format"
-								checked="checked"
-							/>
-							<label class="btn btn-right" for="doubles-format"
-								>Doubles</label
-							>
-						</div>
+  <div aria-label="Defender" role="region" class="panel tool-panel">
+    <fieldset class="poke-info bulk-options tool-options" id="p2">
+      <legend align="center">Defender</legend>
+      <div class="info-group">
+        <label for="defender">Pokémon</label>
+        <select class="set-selector" id="defender" style="width: 100%">
+          <option value="">Select Pokémon</option>
+        </select>
+      </div>
 
-						<div
-							aria-labelledby="selectTerrainInstruction"
-							role="radiogroup"
-							title="Select the current terrain."
-						>
-							<span class="visually-hidden" id="selectTerrainInstruction"
-								>Select the current terrain.</span
-							>
-							<input
-								class="visually-hidden terrain-trigger"
-								type="radio"
-								name="terrain"
-								value=""
-								id="no-terrain"
-								checked="checked"
-							/><label class="btn btn-left" for="no-terrain">None</label>
-							<input
-								class="visually-hidden terrain-trigger"
-								type="radio"
-								name="terrain"
-								value="Electric"
-								id="electric"
-							/><label class="btn btn-mid" for="electric"
-								>Electric</label
-							>
-							<input
-								class="visually-hidden terrain-trigger"
-								type="radio"
-								name="terrain"
-								value="Grassy"
-								id="grassy"
-							/><label class="btn btn-mid" for="grassy">Grassy</label>
-							<input
-								class="visually-hidden terrain-trigger"
-								type="radio"
-								name="terrain"
-								value="Misty"
-								id="misty"
-							/><label class="btn btn-mid" for="misty">Misty</label>
-							<input
-								class="visually-hidden terrain-trigger"
-								type="radio"
-								name="terrain"
-								value="Psychic"
-								id="psychic"
-							/><label class="btn btn-right" for="psychic"
-								>Psychic</label
-							>
-						</div>
-						<hr />
+      <div class="info-group">
+        <label for="defender_item">Item</label>
+        <select id="defender_item" class="item"></select>
+      </div>
+      <div class="info-group">
+				<label for="defender_ability">Ability</label>
+				<select id="defender_ability" class="ability"></select>
+      </div>
 
-						<div
-							aria-labelledby="selectWeatherInstruction"
-							role="radiogroup"
-						>
-							<span class="visually-hidden" id="selectWeatherInstruction"
-								>Select the current weather condition.</span
-							>
-							<div
-								style="width: 22.2em; margin: 5px auto"
-								title="Select the current weather condition."
-							>
-								<input
-									class="weather visually-hidden"
-									type="radio"
-									name="weather"
-									value=""
-									id="clear"
-									checked="checked"
-								/>
-								<label class="btn btn-small btn-left" for="clear"
-									>None</label
-								>
-								<input
-									class="weather visually-hidden"
-									type="radio"
-									name="weather"
-									value="Sun"
-									id="sun"
-								/>
-								<label class="btn btn-small btn-mid" for="sun"
-									>Sun</label
-								>
-								<input
-									class="weather visually-hidden"
-									type="radio"
-									name="weather"
-									value="Rain"
-									id="rain"
-								/>
-								<label class="btn btn-small btn-mid" for="rain"
-									>Rain</label
-								>
-								<input
-									class="weather visually-hidden"
-									type="radio"
-									name="weather"
-									value="Sand"
-									id="sand"
-								/>
-								<label class="btn btn-small btn-mid" for="sand"
-									>Sand</label
-								>
-								<input
-									class="weather visually-hidden"
-									type="radio"
-									name="weather"
-									value="Snow"
-									id="snow"
-								/>
-								<label class="btn btn-small btn-right" for="snow"
-									>Snow</label
-								>
-							</div>
-						</div>
-						<hr />
-
-						<div
-							aria-labelledby="selectFieldStateInstruction"
-							role="group"
-						>
-							<span
-								class="visually-hidden"
-								id="selectFieldStateInstruction"
-								>Select the current field state.</span
-							>
-							<div
-								style="width: 22.2em; margin: 5px auto"
-								title="Select the current field state."
-							>
-								<input
-									class="field-state visually-hidden"
-									type="checkbox"
-									name="fieldState"
-									value="Gravity"
-									id="gravity"
-								/>
-								<label class="btn btn-small btn-left" for="gravity"
-									>Gravity</label
-								>
-								<input
-									class="field-state visually-hidden"
-									type="checkbox"
-									name="fieldState"
-									value="MagicRoom"
-									id="magic-room"
-								/>
-								<label class="btn btn-small btn-mid" for="magic-room"
-									>Magic Room</label
-								>
-								<input
-									class="field-state visually-hidden"
-									type="checkbox"
-									name="fieldState"
-									value="WonderRoom"
-									id="wonder-room"
-								/>
-								<label class="btn btn-small btn-right" for="wonder-room"
-									>Wonder Room</label
-								>
-							</div>
-						</div>
-						<hr />
-
-						<table class="field">
-							<thead>
-								<tr>
-									<th scope="col">
-										<div class="visually-hidden">Attacker's side</div>
-									</th>
-									<th scope="col">
-										<div class="visually-hidden">Defender's side</div>
-									</th>
-								</tr>
-							</thead>
-							<tbody>
-								<tr>
-									<div hidden id="selectStealthRockInstruction">
-										Is Stealth Rock affecting this side of the field?
-									</div>
-									<td>
-										<div
-											class="left"
-											title="Is Stealth Rock affecting this side of the field?"
-										>
-											<input
-												aria-describedby="selectStealthRockInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="srL"
-											/>
-											<label class="btn btn-xwide" for="srL"
-												>Stealth Rock</label
-											>
-										</div>
-									</td>
-									<td>
-										<div
-											class="right"
-											title="Is Stealth Rock affecting this side of the field?"
-										>
-											<input
-												aria-describedby="selectStealthRockInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="srR"
-											/>
-											<label class="btn btn-xwide" for="srR"
-												>Stealth Rock</label
-											>
-										</div>
-									</td>
-								</tr>
-								<tr>
-									<div hidden id="selectSpikeInstruction">
-										Are there Spikes on this side of the field?
-									</div>
-									<td>
-										<div
-											aria-labelledby="selectSpikeInstruction"
-											class="left"
-											role="radiogroup"
-											title="Are there Spikes on this side of the field?"
-										>
-											<input
-												class="visually-hidden"
-												type="radio"
-												name="spikesL"
-												value="0"
-												id="spikesL0"
-												checked="checked"
-											/>
-											<label
-												class="btn btn-xsmall btn-left"
-												for="spikesL0"
-												>0</label
-											>
-											<input
-												class="visually-hidden"
-												type="radio"
-												name="spikesL"
-												value="1"
-												id="spikesL1"
-											/>
-											<label
-												class="btn btn-xsmall btn-mid"
-												for="spikesL1"
-												>1</label
-											>
-											<input
-												class="visually-hidden"
-												type="radio"
-												name="spikesL"
-												value="2"
-												id="spikesL2"
-											/>
-											<label
-												class="btn btn-xsmall btn-mid"
-												for="spikesL2"
-												>2</label
-											>
-											<input
-												class="visually-hidden"
-												type="radio"
-												name="spikesL"
-												value="3"
-												id="spikesL3"
-											/>
-											<label
-												class="btn btn-wide btn-right"
-												for="spikesL3"
-												>3 Spikes</label
-											>
-										</div>
-									</td>
-									<td>
-										<div
-											aria-labelledby="selectSpikeInstruction"
-											class="right"
-											role="radiogroup"
-											title="Are there Spikes on this side of the field?"
-										>
-											<input
-												class="visually-hidden"
-												type="radio"
-												name="spikesR"
-												value="0"
-												id="spikesR0"
-												checked="checked"
-											/>
-											<label
-												class="btn btn-xsmall btn-left"
-												for="spikesR0"
-												>0</label
-											>
-											<input
-												class="visually-hidden"
-												type="radio"
-												name="spikesR"
-												value="1"
-												id="spikesR1"
-											/>
-											<label
-												class="btn btn-xsmall btn-mid"
-												for="spikesR1"
-												>1</label
-											>
-											<input
-												class="visually-hidden"
-												type="radio"
-												name="spikesR"
-												value="2"
-												id="spikesR2"
-											/>
-											<label
-												class="btn btn-xsmall btn-mid"
-												for="spikesR2"
-												>2</label
-											>
-											<input
-												class="visually-hidden"
-												type="radio"
-												name="spikesR"
-												value="3"
-												id="spikesR3"
-											/>
-											<label
-												class="btn btn-wide btn-right"
-												for="spikesR3"
-												>3 Spikes</label
-											>
-										</div>
-									</td>
-								</tr>
-								<tr>
-									<td>
-										<div
-											class="left"
-											title="Is this Pok&eacute;mon protected by Reflect and/or Light Screen?"
-										>
-											<div hidden id="selectScreenInstruction">
-												Is this Pok&eacute;mon protected by Reflect
-												and/or Light Screen?
-											</div>
-											<input
-												aria-describedby="selectScreenInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="reflectL"
-											/>
-											<label class="btn btn-left" for="reflectL"
-												>Reflect</label
-											>
-											<input
-												aria-describedby="selectScreenInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="lightScreenL"
-											/>
-											<label
-												class="btn btn-xwide btn-right"
-												for="lightScreenL"
-												>Light Screen</label
-											>
-										</div>
-									</td>
-									<td>
-										<div
-											class="right"
-											title="Is this Pok&eacute;mon protected by Reflect and/or Light Screen?"
-										>
-											<input
-												aria-describedby="selectScreenInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="lightScreenR"
-											/>
-											<label
-												class="btn btn-xwide btn-left"
-												for="lightScreenR"
-												>Light Screen</label
-											>
-											<input
-												aria-describedby="selectScreenInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="reflectR"
-											/>
-											<label class="btn btn-right" for="reflectR"
-												>Reflect</label
-											>
-										</div>
-									</td>
-								</tr>
-								<tr>
-									<td>
-										<div
-											class="left"
-											title="Is the Pok&eacute;mon protected by an ally's Friend Guard?"
-										>
-											<div hidden id="selectFriendGuardInstruction">
-												Is the Pok&eacute;mon protected by an ally's
-												Friend Guard?
-											</div>
-											<input
-												aria-describedby="selectFriendGuardInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="friendGuardL"
-											/>
-											<label
-												class="btn btn-xxwide"
-												for="friendGuardL"
-												>Friend Guard</label
-											>
-										</div>
-									</td>
-									<td>
-										<div
-											class="right"
-											title="Is the Pok&eacute;mon protected by an ally's Friend Guard?"
-										>
-											<input
-												aria-describedby="selectFriendGuardInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="friendGuardR"
-											/>
-											<label
-												class="btn btn-xxwide"
-												for="friendGuardR"
-												>Friend Guard</label
-											>
-										</div>
-									</td>
-								</tr>
-								<tr>
-									<td>
-										<div
-											class="left"
-											title="Is the Pok&eacute;mon protected by an ally's Aurora Veil?"
-										>
-											<div hidden id="selectAuroraVeilInstruction">
-												Is the Pok&eacute;mon protected by an ally's
-												Aurora Veil?
-											</div>
-											<input
-												aria-describedby="selectAuroraVeilInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="auroraVeilL"
-											/>
-											<label class="btn btn-xxwide" for="auroraVeilL"
-												>Aurora Veil</label
-											>
-										</div>
-									</td>
-									<td>
-										<div
-											class="right"
-											title="Is the Pok&eacute;mon protected by an ally's Aurora Veil?"
-										>
-											<input
-												aria-describedby="selectAuroraVeilInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="auroraVeilR"
-											/>
-											<label class="btn btn-xxwide" for="auroraVeilR"
-												>Aurora Veil</label
-											>
-										</div>
-									</td>
-								</tr>
-								<tr>
-									<td>
-										<div
-											class="left"
-											title="Is this Pok&eacute;mon protected?"
-										>
-											<div hidden id="selectProtectInstruction">
-												Is this Pok&eacute;mon protected?
-											</div>
-											<input
-												aria-describedby="selectProtectInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="protectL"
-											/>
-											<label class="btn btn-wide" for="protectL"
-												>Protect</label
-											>
-										</div>
-									</td>
-									<td>
-										<div
-											class="right"
-											title="Is this Pok&eacute;mon protected?"
-										>
-											<input
-												aria-describedby="selectProtectInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="protectR"
-											/>
-											<label class="btn btn-wide" for="protectR"
-												>Protect</label
-											>
-										</div>
-									</td>
-								</tr>
-								<tr>
-									<td>
-										<div
-											class="left"
-											title="Has this Pok&eacute;mon been affected by Leech Seed?"
-										>
-											<div hidden id="selectLeechSeedInstruction">
-												Has this Pok&eacute;mon been affected by
-												Leech Seed?
-											</div>
-											<input
-												aria-describedby="selectLeechSeedInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="leechSeedL"
-											/>
-											<label class="btn btn-wide" for="leechSeedL"
-												>Leech Seed</label
-											>
-										</div>
-									</td>
-									<td>
-										<div
-											class="right"
-											title="Has this Pok&eacute;mon been affected by Leech Seed?"
-										>
-											<input
-												aria-describedby="selectLeechSeedInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="leechSeedR"
-											/>
-											<label class="btn btn-wide" for="leechSeedR"
-												>Leech Seed</label
-											>
-										</div>
-									</td>
-								</tr>
-								<tr>
-									<td>
-										<div
-											class="left"
-											title="Has this Pok&eacute;mon been affected by Salt Cure?"
-										>
-											<div hidden id="selectSaltCureInstruction">
-												Has this Pok&eacute;mon been affected by
-												Salt Cure?
-											</div>
-											<input
-												aria-describedby="selectSaltCureInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="saltCureL"
-											/>
-											<label class="btn btn-wide" for="saltCureL"
-												>Salt Cure</label
-											>
-										</div>
-									</td>
-									<td>
-										<div
-											class="right"
-											title="Has this Pok&eacute;mon been affected by Salt Cure?"
-										>
-											<input
-												aria-describedby="selectSaltCureInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="saltCureR"
-											/>
-											<label class="btn btn-wide" for="saltCureR"
-												>Salt Cure</label
-											>
-										</div>
-									</td>
-								</tr>
-								<tr>
-									<td>
-										<div
-											class="left"
-											title="Has this Pok&eacute;mon powered up with Charge?"
-										>
-											<div hidden id="selectChargeInstruction">
-												Has this Pok&eacute;mon powered up with
-												Charge?
-											</div>
-											<input
-												aria-describedby="selectChargeInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="chargeL"
-											/>
-											<label class="btn btn-wide" for="chargeL"
-												>Charge</label
-											>
-										</div>
-									</td>
-									<td>
-										<div
-											class="right"
-											title="Has this Pok&eacute;mon powered up with Charge?"
-										>
-											<input
-												aria-describedby="selectChargeInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="chargeR"
-											/>
-											<label class="btn btn-wide" for="chargeR"
-												>Charge</label
-											>
-										</div>
-									</td>
-								</tr>
-								<tr>
-									<td>
-										<div
-											class="left"
-											title="Has this Pok&eacute;mon's power been boosted by an ally's Helping Hand?"
-										>
-											<div hidden id="selectHelpingHandInstruction">
-												Has this Pok&eacute;mon's power been boosted
-												by an ally's Helping Hand?
-											</div>
-											<input
-												aria-describedby="selectHelpingHandInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="helpingHandL"
-											/>
-											<label
-												class="btn btn-xxwide"
-												for="helpingHandL"
-												>Helping Hand</label
-											>
-										</div>
-									</td>
-									<td>
-										<div
-											class="right"
-											title="Has this Pok&eacute;mon's power been boosted by an ally's Helping Hand?"
-										>
-											<input
-												aria-describedby="selectHelpingHandInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="helpingHandR"
-											/>
-											<label
-												class="btn btn-xxwide"
-												for="helpingHandR"
-												>Helping Hand</label
-											>
-										</div>
-									</td>
-								</tr>
-								<tr>
-									<td>
-										<div
-											class="left"
-											title="Has this Pok&eacute;mon's speed been boosted by Tailwind?"
-										>
-											<div hidden id="selectTailwindInstruction">
-												Has this Pok&eacute;mon's speed been boosted
-												by Tailwind?
-											</div>
-											<input
-												aria-describedby="selectTailwindInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="tailwindL"
-											/>
-											<label class="btn btn-xxwide" for="tailwindL"
-												>Tailwind</label
-											>
-										</div>
-									</td>
-									<td>
-										<div
-											class="right"
-											title="Has this Pok&eacute;mon's speed been boosted by Tailwind?"
-										>
-											<input
-												aria-describedby="selectTailwindInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="tailwindR"
-											/>
-											<label class="btn btn-xxwide" for="tailwindR"
-												>Tailwind</label
-											>
-										</div>
-									</td>
-								</tr>
-								<tr>
-									<td>
-										<div
-											class="left"
-											title="Is the Pok&eacute;mon affected by Power Trick?"
-										>
-											<div hidden id="selectPowerTrickInstruction">
-												Is the Pok&eacute;mon affected by Power
-												Trick?
-											</div>
-											<input
-												aria-describedby="selectPowerTrickInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="powerTrickL"
-											/>
-											<label class="btn btn-xxwide" for="powerTrickL"
-												>Power Trick</label
-											>
-										</div>
-									</td>
-									<td>
-										<div
-											class="right"
-											title="Is the Pok&eacute;mon affected by Power Trick?"
-										>
-											<input
-												aria-describedby="selectPowerTrickInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="powerTrickR"
-											/>
-											<label class="btn btn-xxwide" for="powerTrickR"
-												>Power Trick</label
-											>
-										</div>
-									</td>
-								</tr>
-								<tr>
-									<td>
-										<div
-											class="left"
-											title="Has the Pok&eacute;mon boosted all its stats one stage?"
-										>
-											<div hidden id="selectStatBoostInstruction">
-												Has the Pok&eacute;mon boosted all its stats
-												one stage?
-											</div>
-											<input
-												aria-describedby="selectStatBoostInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="StatBoostL"
-											/>
-											<label class="btn btn-xxwide" for="StatBoostL"
-												>+1 All Stats</label
-											>
-										</div>
-									</td>
-									<td>
-										<div
-											class="right"
-											title="Has the Pok&eacute;mon boosted all its stats one stage?"
-										>
-											<input
-												aria-describedby="selectStatBoostInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="StatBoostR"
-											/>
-											<label class="btn btn-xxwide" for="StatBoostR"
-												>+1 All Stats</label
-											>
-										</div>
-									</td>
-								</tr>
-								<tr>
-									<td>
-										<div
-											class="left"
-											title="Is the defending Pok&eacute;mon switching out?"
-										>
-											<div hidden id="selectSwitchingInstruction">
-												Is the defending Pok&eacute;mon switching
-												out?
-											</div>
-											<input
-												aria-describedby="selectSwitchingInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="switchingL"
-											/>
-											<label class="btn btn-xxwide" for="switchingL"
-												>Switching Out</label
-											>
-										</div>
-									</td>
-									<td>
-										<div
-											class="right"
-											title="Is the defending Pok&eacute;mon switching out?"
-										>
-											<input
-												aria-describedby="selectSwitchingInstruction"
-												class="visually-hidden"
-												type="checkbox"
-												id="switchingR"
-											/>
-											<label class="btn btn-xxwide" for="switchingR"
-												>Switching Out</label
-											>
-										</div>
-									</td>
-								</tr>
-							</tbody>
-						</table>
-					</fieldset>
-				</div>
-			</div>
-
-			<div aria-label="Defender" role="region" class="panel">
-				<fieldset class="poke-info" id="p2">
-					<legend align="center">Defender</legend>
-					<select
-						class="set-selector"
-						id="defender"
-						style="width: 100%"
-					>
-						<option value="">Select Pokemon</option>
-					</select>
-
-					<div class="info-group">
-						<div>
-							<label for="defender_item">Item</label>
-							<select
-								id="defender_item"
-								class="item"
-								style="width: 14em"
-							></select>
-						</div>
-					</div>
-					<div class="info-group">
-						<div>
-							<label for="defender_ability">Ability</label>
-							<select
-								id="defender_ability"
-								class="ability"
-								style="width: 14em"
-							></select>
-						</div>
-					</div>
-
-					<div class="info-group">
-						<table>
-							<thead>
-								<tr>
-									<th scope="col">Stat</th>
-									<th scope="col">EVs (0-32)</th>
-								</tr>
-							</thead>
-							<tbody>
-								<tr class="hp">
-									<th scope="row">
-										<label for="defender_hp">HP</label>
-									</th>
-									<td>
-										<input
-											type="number"
-											id="defender_hp"
-											value="0"
-											min="0"
-											max="32"
-											style="width: 60px"
-										/>
-									</td>
-								</tr>
-								<tr class="df">
-									<th scope="row">
-										<label for="defender_def">Def</label>
-									</th>
-									<td>
-										<input
-											type="number"
-											id="defender_def"
-											value="0"
-											min="0"
-											max="32"
-											style="width: 60px"
-										/>
-									</td>
-								</tr>
-								<tr class="sd">
-									<th scope="row">
-										<label for="defender_spd">SpD</label>
-									</th>
-									<td>
-										<input
-											type="number"
-											id="defender_spd"
-											value="0"
-											min="0"
-											max="32"
-											style="width: 60px"
-										/>
-									</td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-				</fieldset>
-			</div>
-		</div>
-
-		<script src="/static/js/vendor/jquery-1.9.1.min.js"></script>
-		<script src="/static/js/vendor/select2/select2.min.js"></script>
-		<script src="/static/js/bulk_ko.js"></script>
-	</body>
-</html>
+      <div class="info-group">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Stat</th>
+              <th scope="col">EVs (0-32)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="hp">
+              <th scope="row">
+                <label for="defender_hp">HP</label>
+              </th>
+              <td>
+                <input
+                  type="number"
+                  id="defender_hp"
+                  value="0"
+                  min="0"
+                  max="32"
+                  style="width: 60px"
+                />
+              </td>
+            </tr>
+            <tr class="df">
+              <th scope="row">
+                <label for="defender_def">Def</label>
+              </th>
+              <td>
+                <input
+                  type="number"
+                  id="defender_def"
+                  value="0"
+                  min="0"
+                  max="32"
+                  style="width: 60px"
+                />
+              </td>
+            </tr>
+            <tr class="sd">
+              <th scope="row">
+                <label for="defender_spd">SpD</label>
+              </th>
+              <td>
+                <input
+                  type="number"
+                  id="defender_spd"
+                  value="0"
+                  min="0"
+                  max="32"
+                  style="width: 60px"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </fieldset>
+  </div>
+</div>
+{% endblock %} {% block page_scripts %}
+<script src="/static/js/bulk_common.js"></script>
+<script src="/static/js/bulk_ko.js"></script>
+{% endblock %}
