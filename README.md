@@ -294,3 +294,11 @@ clamps the number, and 252 "stat points" quietly yields a 436 Atk Rillaboom.
 
 Two related things gen 0 ignores outright: `level` (`pokemon.ts` forces 50)
 and `ivs` (forced to 31). Natures still apply their usual ±10%.
+
+## Solver and calculator performance fixes
+
+The staged solver changes replace linear scans of stat investments and damage
+breakpoints with binary searches. Calculator batches are written concurrently
+with response reads to avoid pipe deadlocks, and identical requests share a
+bounded per-process cache entry. The focused regression tests check the
+minimum result, batch behavior and request-cache reuse.

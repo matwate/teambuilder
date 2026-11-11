@@ -153,6 +153,14 @@ Status at review time: found by read, not reproduced. This backlog lists the rem
 
 ## 5. Improvements to the current code
 
+### Current staged change: solver performance
+
+The staged changes address I2's solver and calculator I/O work: minimum-point
+and damage-breakpoint searches use binary search, calculator request batches
+are written while responses are read, and identical requests share entries in
+a bounded per-process LRU cache. Focused tests cover the search thresholds,
+batch writing and cache behavior.
+
 ### I1. Test base and CI
 
 - Move tests to `tests/`. Use pytest. Remove the `sys.path.insert` lines.

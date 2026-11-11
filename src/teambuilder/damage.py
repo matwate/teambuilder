@@ -210,32 +210,76 @@ def _evaluate(requests: list[dict], points: list[int] | None = None):
     """
     point_values = points if points is not None else range(len(requests))
     for pts, response in zip(point_values, calculate(requests)):
-        if "error" in response:
-            raise CalcError(response["error"])
-        investment = Investment(
-            pts, response["desc"], tuple(response["percent"]),
-            tuple(response["range"]), response["defenderMaxHP"],
-        )
-        yield response, investment
+        yield response, _investment(response, pts)
+
+
+def _investment(response: dict, points: int) -> Investment:
+    if "error" in response:
+        raise CalcError(response["error"])
+    return Investment(
+        points, response["desc"], tuple(response["percent"]),
+        tuple(response["range"]), response["defenderMaxHP"],
+    )
 
 
 def _cheapest(requests: list[dict], accept) -> Investment | None:
-    """First response that `accept` likes, which is the cheapest by monotonicity."""
-    for response, investment in _evaluate(requests):
-        if accept(response):
-            return investment
-    return None
+    """Find the cheapest accepted request with logarithmic calculator calls."""
+    if not requests:
+        return None
+
+    cache: dict[int, tuple[dict, Investment]] = {}
+
+    def at(index: int) -> tuple[dict, Investment]:
+        if index not in cache:
+            response = calculate(requests[index])
+            cache[index] = (response, _investment(response, index))
+        return cache[index]
+
+    last = len(requests) - 1
+    if not accept(at(last)[0]):
+        return None
+
+    low, high = 0, last
+    while low < high:
+        middle = (low + high) // 2
+        if accept(at(middle)[0]):
+            high = middle
+        else:
+            low = middle + 1
+    return at(low)[1]
 
 
 def _breakpoints(requests: list[dict], key, points: list[int] | None = None) -> list[Investment]:
-    """One Investment per distinct value of `key(response)`, at the fewest points that reach it."""
+    """Find the first request for each monotonic change in `key(response)`."""
+    if not requests:
+        return []
+
+    point_values = points if points is not None else range(len(requests))
+    cache: dict[int, tuple[dict, Investment]] = {}
+
+    def at(index: int) -> tuple[dict, Investment]:
+        if index not in cache:
+            response = calculate(requests[index])
+            cache[index] = (response, _investment(response, point_values[index]))
+        return cache[index]
+
     breakpoints: list[Investment] = []
-    previous = object()  # sentinel: never equals a real key value, so points=0 is always recorded
-    for response, investment in _evaluate(requests, points):
-        current = key(response)
-        if current != previous:
-            breakpoints.append(investment)
-            previous = current
+    start = 0
+    breakpoints.append(at(start)[1])
+    last = len(requests) - 1
+    while start < last:
+        current = key(at(start)[0])
+        if key(at(last)[0]) == current:
+            break
+        low, high = start + 1, last
+        while low < high:
+            middle = (low + high) // 2
+            if key(at(middle)[0]) == current:
+                low = middle + 1
+            else:
+                high = middle
+        start = low
+        breakpoints.append(at(start)[1])
     return breakpoints
 
 

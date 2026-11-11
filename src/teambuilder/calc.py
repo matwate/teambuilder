@@ -3,6 +3,7 @@ import json
 import re
 import subprocess
 import threading
+from collections import OrderedDict
 from functools import cache
 from pathlib import Path
 from typing import overload
@@ -69,11 +70,27 @@ def calculate(request: dict | list[dict]) -> dict | list[dict]:
     single request returns a single response, and raises CalcError instead.
     """
     batch = request if isinstance(request, list) else [request]
-    lines = [json.dumps(r) for r in batch]
-    responses = _served(lines)
-    if responses is None:
-        stdout = _node([str(CALC_JS)], "\n".join(lines))
-        responses = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+    keys = [json.dumps(item, sort_keys=True, separators=(",", ":")) for item in batch]
+    with _calculation_cache_lock:
+        missing = list(dict.fromkeys(key for key in keys if key not in _calculation_cache))
+        if missing:
+            responses = _served(missing)
+            if responses is None:
+                stdout = _node([str(CALC_JS)], "\n".join(missing))
+                responses = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+            if len(responses) != len(missing):
+                raise CalcError(
+                    f"calculator returned {len(responses)} responses for {len(missing)} requests"
+                )
+            for key, response_item in zip(missing, responses):
+                _calculation_cache[key] = json.dumps(response_item, separators=(",", ":"))
+                _calculation_cache.move_to_end(key)
+            while len(_calculation_cache) > _CALC_CACHE_LIMIT:
+                _calculation_cache.popitem(last=False)
+        responses = []
+        for key in keys:
+            _calculation_cache.move_to_end(key)
+            responses.append(json.loads(_calculation_cache[key]))
 
     if isinstance(request, list):
         return responses
@@ -191,19 +208,21 @@ def _move_types(gen: int) -> dict[str, str | None]:
 # lock is for the web server, whose requests run on threads of their own.
 _server: subprocess.Popen | None = None
 _server_lock = threading.Lock()
+_CALC_CACHE_LIMIT = 8192
+_calculation_cache: OrderedDict[str, str] = OrderedDict()
+_calculation_cache_lock = threading.Lock()
 
 
 def _served(lines: list[str]) -> list[dict] | None:
     """Responses from the long-lived calc.js, or None if it is not answering.
 
-    Lines go one at a time, each answer read before the next is sent: a whole
-    batch written up front would fill the pipe back while nobody reads it, and
-    both sides would wait on each other. None leaves the batch to a one-off
-    process, which runs it the old way and reports node's own error if there
-    is one - the next batch starts a fresh server.
+    A writer thread sends the batch while this thread drains stdout, preventing
+    either pipe from filling up and blocking the other. None leaves the batch
+    to a one-off process; the next batch starts a fresh server.
     """
     global _server
     with _server_lock:
+        writer = None
         try:
             if _server is None or _server.poll() is not None:
                 # stderr is the library's chatter (see calc.js); nothing reads
@@ -218,17 +237,31 @@ def _served(lines: list[str]) -> list[dict] | None:
             stdout = _server.stdout
             if stdin is None or stdout is None:
                 raise BrokenPipeError
-            for line in lines:
-                stdin.write(line + "\n")
-                stdin.flush()
+            write_errors: list[OSError | ValueError] = []
+
+            def write_batch() -> None:
+                try:
+                    stdin.write("".join(line + "\n" for line in lines))
+                    stdin.flush()
+                except (OSError, ValueError) as err:
+                    write_errors.append(err)
+
+            writer = threading.Thread(target=write_batch, daemon=True)
+            writer.start()
+            for _ in lines:
                 answer = stdout.readline()
                 if not answer:
                     raise BrokenPipeError
                 responses.append(json.loads(answer))
+            writer.join()
+            if write_errors:
+                raise write_errors[0]
             return responses
         except (OSError, ValueError):
             if _server is not None:
                 _server.kill()
+            if writer is not None:
+                writer.join(timeout=1)
             _server = None
             return None
 
