@@ -85,10 +85,23 @@ def calculate(request: dict | list[dict]) -> dict | list[dict]:
 # Champout names 42 species the calculator does not have, and every one of them
 # resolves cleanly - each mapping below was checked by comparing base stats.
 #
-# The cosmetic families are one species to the calculator: Furfrou's nine trims,
-# Vivillon's eighteen patterns, Florges' flower colours, Alcremie's creams and
-# swirls, and Maushold's Family of Four all share their base form's stats.
-COSMETIC_FORMS = ("Furfrou", "Vivillon", "Florges", "Alcremie", "Maushold")
+# These exact cosmetic forms share their base form's stats in the calculator.
+COSMETIC_FORMS = {
+    "Furfrou-Dandy", "Furfrou-Debutante", "Furfrou-Diamond", "Furfrou-Heart",
+    "Furfrou-Kabuki", "Furfrou-La Reine", "Furfrou-Matron", "Furfrou-Pharaoh",
+    "Furfrou-Star",
+    "Vivillon-Archipelago", "Vivillon-Continental", "Vivillon-Elegant",
+    "Vivillon-Fancy", "Vivillon-Garden", "Vivillon-High Plains",
+    "Vivillon-Jungle", "Vivillon-Marine", "Vivillon-Meadow", "Vivillon-Modern",
+    "Vivillon-Monsoon", "Vivillon-Ocean", "Vivillon-Poké Ball", "Vivillon-Polar",
+    "Vivillon-River", "Vivillon-Sandstorm", "Vivillon-Savanna", "Vivillon-Sun",
+    "Vivillon-Tundra",
+    "Florges-Blue", "Florges-Orange", "Florges-White", "Florges-Yellow",
+    "Alcremie-Caramel Swirl", "Alcremie-Lemon Cream", "Alcremie-Matcha Cream",
+    "Alcremie-Mint Cream", "Alcremie-Rainbow Swirl", "Alcremie-Ruby Cream",
+    "Alcremie-Ruby Swirl", "Alcremie-Salted Cream",
+    "Maushold-Family of Four",
+}
 
 # These two are not missing, only named differently. Gourgeist-Jumbo is
 # 85/100/122/58/75/54, which is the calculator's Gourgeist-Super, and champout's
@@ -106,9 +119,8 @@ def species(name: str) -> str:
     """
     if name in RENAMED:
         return RENAMED[name]
-    for base in COSMETIC_FORMS:
-        if name.startswith(base):
-            return base
+    if _to_id(name) in _COSMETIC_FORM_IDS:
+        return name.split("-", 1)[0]
     return name
 
 
@@ -148,12 +160,13 @@ def build_request(
         "field": {"gameType": "Doubles", **(field_opts or {})},
     }
 
-
-    # Add side conditions if provided
-    if defender_side:
-        request["defenderSide"] = defender_side
-    if attacker_side:
-        request["attackerSide"] = attacker_side
+    # Side conditions are properties of Field in @smogon/calc.
+    for key, side in (("defenderSide", defender_side), ("attackerSide", attacker_side)):
+        if side:
+            request["field"][key] = {
+                **request["field"].get(key, {}),
+                **side,
+            }
 
     # Only worth sending when there is one: calc.js echoes it back, which is
     # how a response is matched to its request in a batch.
@@ -237,6 +250,9 @@ def _to_id(name: str) -> str:
     # The library keys its data by id: "Grassy Glide" is grassyglide, and
     # "Farfetch'd" (with either apostrophe) is farfetchd.
     return re.sub(r"[^a-z0-9]+", "", name.lower())
+
+
+_COSMETIC_FORM_IDS = {_to_id(name) for name in COSMETIC_FORMS}
 
 
 # Type effectiveness chart for Champions (same as standard Pokemon type chart)

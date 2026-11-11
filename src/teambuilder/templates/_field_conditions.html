@@ -251,6 +251,7 @@
 											>
 										</div>
 									</td>
+									{% if not hide_solver_ignored %}
 									<td>
 										<div hidden id="selectStealthRockInstruction">
 											Is Stealth Rock affecting the defender?
@@ -270,6 +271,7 @@
 											>
 										</div>
 									</td>
+									{% endif %}
 								</tr>
 								<tr>
 									
@@ -293,6 +295,7 @@
 											>
 										</div>
 									</td>
+									{% if not hide_solver_ignored %}
 									<td>
 										<div hidden id="selectSpikeInstruction">
 											Are there Spikes on the defender's side of the field?
@@ -354,6 +357,7 @@
 											>
 										</div>
 									</td>
+									{% endif %}
 								</tr>
 								<tr>
 									<td>
@@ -463,6 +467,7 @@
 									</td>
 								</tr>
 								<tr>
+									{% if not hide_solver_ignored %}
 									<td></td>
 									<td>
 										<div
@@ -480,8 +485,10 @@
 											>
 										</div>
 									</td>
+									{% endif %}
 								</tr>
 								<tr>
+									{% if not hide_solver_ignored %}
 									<td></td>
 									<td>
 										<div
@@ -499,6 +506,7 @@
 											>
 										</div>
 									</td>
+									{% endif %}
 								</tr>
 								<tr>
 									<td></td>

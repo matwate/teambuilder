@@ -8,17 +8,21 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from werkzeug.datastructures import MultiDict
 
+from teambuilder import damage
 from teambuilder.api_helpers import (
     build_bulk_ko_kwargs,
     build_matchup_options,
     candidate_names,
 )
-from teambuilder.calc import build_request, calculate
+from teambuilder.calc import build_request, calculate, is_super_effective, species
 from teambuilder.damage import (
-    BestAbility, Investment, _required_ability, ko_filter, ko_result_row, survive_filter,
+    BestAbility, Investment, _required_ability, can_ko_any_atk, ko_filter,
+    ko_result_row, survive_filter,
 )
-from teambuilder.pokedex import get_abilities_for_poke
+from teambuilder.main import app as cli_app
+from teambuilder.pokedex import get_abilities_for_poke, learnset, search_names
 from teambuilder.web_server import app, run_bulk_survive, stream_events
+from typer.testing import CliRunner
 
 
 class MatchupOptionsTests(unittest.TestCase):
@@ -171,6 +175,27 @@ class MatchupOptionsTests(unittest.TestCase):
         self.assertTrue(build_bulk_ko_kwargs({"positive_nature": "true"})["positive_nature"])
         self.assertFalse(build_bulk_ko_kwargs({"positive_nature": "false"})["positive_nature"])
 
+    def test_bulk_ko_preserves_signed_defender_evs(self):
+        kwargs = build_bulk_ko_kwargs({
+            "defender_hp": "4",
+            "defender_def": "24+",
+            "defender_spd": "16-",
+        })
+
+        self.assertEqual(kwargs["defender_evs"], {
+            "hp": 4,
+            "def": "24+",
+            "spd": "16-",
+        })
+        defense_evs, defense_opts = damage.normalize_evs(kwargs["defender_evs"], None, "def")
+        special_defense_evs, special_defense_opts = damage.normalize_evs(
+            kwargs["defender_evs"], None, "spd"
+        )
+        self.assertEqual(defense_evs, {"hp": 4, "def": 24, "spd": 16})
+        self.assertEqual(defense_opts, {"nature": "Relaxed"})
+        self.assertEqual(special_defense_evs, {"hp": 4, "def": 24, "spd": 16})
+        self.assertEqual(special_defense_opts, {"nature": "Naive"})
+
     def test_bulk_survive_maps_repeated_field_states_and_conditions(self):
         data = MultiDict([
             ("attacker", "Pikachu"),
@@ -283,6 +308,7 @@ class MatchupOptionsTests(unittest.TestCase):
                 checked_natures = []
 
                 def fake_minimum(_attacker, _move, _defender, *, attacker_opts=None, **_kwargs):
+                    del _attacker, _move, _defender, _kwargs
                     nature = (attacker_opts or {}).get("nature", "Serious")
                     checked_natures.append(nature)
                     points = 2 if nature == expected_nature else 4
@@ -375,7 +401,7 @@ class MatchupOptionsTests(unittest.TestCase):
             events = iter(response.response)
             next(events)
             self.assertTrue(started.is_set())
-            events.close()
+            response.close()
 
         self.assertTrue(stopped.wait(timeout=1))
 
@@ -405,6 +431,172 @@ class MatchupOptionsTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0], ["Pikachu"])
         self.assertEqual(run.call_args.args[1].getlist("field[]"), ["Gravity"])
         self.assertIsNotNone(run.call_args.kwargs["progress_callback"])
+
+
+class KoAnyAtkRegressionTests(unittest.TestCase):
+    def test_can_ko_any_atk_returns_results_on_a_small_sample(self):
+        candidates = search_names()[:10]
+        filter_obj = can_ko_any_atk("Charizard-Mega Y", only_super_effective=True)
+        results = filter_obj.run(candidates)
+
+        self.assertTrue(results)
+        self.assertLessEqual(len(results), len(candidates))
+
+
+class SuperEffectiveMoveRegressionTests(unittest.TestCase):
+    def test_aerodactyl_mega_has_super_effective_moves_vs_fire_flying(self):
+        moves = learnset("Aerodactyl-Mega")
+        se_moves = [m for m in moves if is_super_effective(m, ["Fire", "Flying"])]
+
+        self.assertGreater(len(se_moves), 0)
+        self.assertIn("Meteor Beam", se_moves)
+
+    def test_single_candidate_can_ko_run_is_fast_and_valid(self):
+        results = can_ko_any_atk("Charizard-Mega Y", only_super_effective=True).run(
+            ["Aerodactyl-Mega"]
+        )
+
+        self.assertIn("Aerodactyl-Mega", results)
+        self.assertGreater(results["Aerodactyl-Mega"][0].points, -1)
+
+    def test_dragonize_makes_normal_moves_eligible_against_dragon(self):
+        with (
+            patch("teambuilder.damage._query", return_value=[("Dragon", None)]),
+            patch("teambuilder.damage.get_abilities_for_poke", return_value=["Dragonize"]),
+            patch("teambuilder.damage._damaging_moves", return_value=["Normal Move"]),
+            patch("teambuilder.damage.get_move_type", return_value="Normal"),
+            patch(
+                "teambuilder.damage._ko_at_best_ability",
+                return_value=Investment(0, "test", (0.0, 0.0), (1, 2), 100),
+            ) as ko_check,
+        ):
+            results = can_ko_any_atk("Dragonite").run(["Feraligatr-Mega"])
+
+        self.assertIn("Feraligatr-Mega", results)
+        ko_check.assert_called_once()
+
+
+class RoadmapRegressionTests(unittest.TestCase):
+    def test_side_conditions_are_nested_in_field(self):
+        request = build_request(
+            "Pikachu",
+            "Thunderbolt",
+            "Snorlax",
+            defender_side={"isReflect": True},
+            attacker_side={"isHelpingHand": True},
+        )
+
+        self.assertEqual(request["field"]["defenderSide"], {"isReflect": True})
+        self.assertEqual(request["field"]["attackerSide"], {"isHelpingHand": True})
+        self.assertNotIn("defenderSide", request)
+        self.assertNotIn("attackerSide", request)
+
+    def test_cosmetic_species_mapping_matches_exact_forms(self):
+        self.assertEqual(species("Furfrou-Star"), "Furfrou")
+        self.assertEqual(species("Furfrou-Mega"), "Furfrou-Mega")
+        self.assertEqual(species("Vivillon-Pok\u00c3\u00a9 Ball"), "Vivillon")
+
+    def test_survival_keeps_preset_hp_points_as_a_floor(self):
+        def fake_calculate(requests):
+            responses = []
+            for request in requests:
+                evs = request["defender"]["opts"]["evs"]
+                hp = evs.get("hp", 0)
+                defense = evs.get("def", 0)
+                max_hp = 100 + hp
+                max_damage = 100 - 2 * defense
+                responses.append({
+                    "desc": "test",
+                    "percent": (0, 0),
+                    "range": (max_damage, max_damage),
+                    "defenderMaxHP": max_hp,
+                })
+            return responses
+
+        with (
+            patch.object(damage, "move_category", return_value="Physical"),
+            patch.object(damage, "calculate", side_effect=fake_calculate),
+        ):
+            results = damage.min_evs_to_survive(
+                "Pikachu",
+                "Tackle",
+                "Snorlax",
+                defender_evs={"hp": 10},
+                showAll=False,
+            )
+
+        assert results is not None
+        self.assertTrue(results)
+        spread = results[0].spread
+        assert spread is not None
+        self.assertEqual(spread["hp"], 10)
+        self.assertEqual(results[0].points, sum(spread.values()))
+
+    def test_survival_rechecks_hp_dependent_damage(self):
+        def fake_calculate(requests):
+            responses = []
+            for request in requests:
+                hp = request["defender"]["opts"]["evs"].get("hp", 0)
+                max_hp = 100 + hp
+                max_damage = 60 + hp // 10
+                responses.append({
+                    "desc": "test",
+                    "percent": (0, 0),
+                    "range": (max_damage, max_damage),
+                    "defenderMaxHP": max_hp,
+                })
+            return responses
+
+        with (
+            patch.object(damage, "move_category", return_value="Physical"),
+            patch.object(damage, "calculate", side_effect=fake_calculate),
+        ):
+            results = damage.min_evs_to_survive(
+                "Pikachu", "Super Fang", "Snorlax", percent=50, showAll=False
+            )
+
+        assert results is not None
+        self.assertTrue(results)
+        spread = results[0].spread
+        assert spread is not None
+        self.assertEqual(spread["hp"], 25)
+
+    def test_percent_zero_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "percent"):
+            damage.min_evs_to_survive("Pikachu", "Tackle", "Snorlax", percent=0)
+
+    def test_cli_requests_the_cheapest_survival_spread(self):
+        expensive = Investment(10, "expensive", (1, 2), (1, 2), 100)
+        mixed = Investment(3, "mixed spread", (1, 2), (1, 2), 100)
+
+        def fake_solver(*args, showAll, **kwargs):
+            del args, kwargs
+            return [expensive, mixed] if showAll else [mixed]
+
+        with patch(
+            "teambuilder.main.min_evs_to_survive", side_effect=fake_solver
+        ) as solver:
+            result = CliRunner().invoke(
+                cli_app, ["survive", "Pikachu", "Tackle", "Snorlax"]
+            )
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("3 points", result.output)
+        self.assertIn("mixed spread", result.output)
+        call = solver.call_args
+        if call is None:
+            self.fail("Expected the survival solver to be called")
+        self.assertFalse(call.kwargs["showAll"])
+
+    def test_move_stat_overrides(self):
+        self.assertEqual(damage.attacking_stat("Body Press"), "def")
+        self.assertEqual(damage.attacking_stat("Foul Play"), "atk")
+        self.assertEqual(damage.relevant_defense_stat("spa", "Psyshock"), "def")
+
+    def test_invalid_nature_modifier_is_a_value_error(self):
+        with self.assertRaisesRegex(ValueError, "nature modifier"):
+            damage.with_nature({}, "invalid", "atk")
+
 
 if __name__ == "__main__":
     unittest.main()

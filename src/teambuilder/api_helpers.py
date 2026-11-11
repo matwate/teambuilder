@@ -126,7 +126,13 @@ def build_matchup_options(data) -> tuple[dict, dict, dict]:
 
 def build_bulk_ko_kwargs(data) -> dict:
     """Keyword arguments for can_ko / can_ko_any_atk, empty values as None."""
-    defender_evs = {s: int(data[f"defender_{s}"]) for s in ("hp", "def", "spd") if data.get(f"defender_{s}")}
+    defender_evs = {}
+    if data.get("defender_hp"):
+        defender_evs["hp"] = int(data["defender_hp"])
+    for stat in ("def", "spd"):
+        if data.get(f"defender_{stat}"):
+            defender_evs[stat] = data[f"defender_{stat}"]
+
     field_opts = build_field_opts(data)
     apply_matchup_conditions(data, field_opts)
     return dict(

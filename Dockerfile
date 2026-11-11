@@ -15,8 +15,7 @@ WORKDIR /app
 COPY . .
 
 # Install the Python project and its locked dependencies.
-RUN uv sync --frozen \
-    && uv pip install --python .venv/bin/python gunicorn
+RUN uv sync --frozen --extra web
 
 # Fetch the Pokémon data files used to build the database.
 RUN git clone --filter=blob:none --no-checkout \
@@ -26,24 +25,12 @@ RUN git clone --filter=blob:none --no-checkout \
     && git sparse-checkout set parse \
     && git checkout main
 
-# Fetch the calculator version documented by this project.
-RUN git clone --filter=blob:none --no-checkout \
-    https://github.com/smogon/damage-calc.git /app/damage-calc \
-    && cd /app/damage-calc \
-    && git sparse-checkout init --cone \
-    && git sparse-checkout set calc \
-    && git checkout e7fd7e59f3eef7ea42fba3c8b83261cb4a14109d
-
-# Compile the calculator and install it for the Python wrapper.
-RUN cd /app/damage-calc/calc \
-    && npm install \
-    && npm run compile \
-    && cd /app \
-    && npm install ./damage-calc/calc
+# Install the pinned calculator package.
+RUN npm ci --omit=dev
 
 # Generate the DuckDB database from the Pokémon data.
 RUN uv run teambuilder build-db
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "uv run gunicorn --bind 0.0.0.0:${PORT:-10000} teambuilder.web_server:app"]
+CMD ["sh", "-c", "uv run gunicorn --workers 2 --threads 4 --timeout 120 --bind 0.0.0.0:${PORT:-10000} teambuilder.web_server:app"]

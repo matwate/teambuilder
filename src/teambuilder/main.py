@@ -122,7 +122,6 @@ def survive(
     field_opts: str = typer.Option("{}", help=JSON_HELP),
 ):
     """Fewest HP and defence points that hold the damage under the threshold."""
-    # min_evs_to_survive lists every tied spread, cheapest first; one is enough.
     _report(
         lambda: (min_evs_to_survive(
             attacker, move, defender,
@@ -133,6 +132,7 @@ def survive(
             defender_opts=_json(defender_opts, "--defender-opts"),
             move_opts=_json(move_opts, "--move-opts"),
             field_opts=_json(field_opts, "--field-opts"),
+            showAll=False,
         ) or [None])[0],
         f"no HP/defence spread up to 32/32 points holds the damage under {percent}%",
     )

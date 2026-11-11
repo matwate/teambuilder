@@ -43,7 +43,7 @@ $(document).ready(function() {
     $('#filter_ability').append('<option value="">Any</option>');
     $.get('/api/abilities', function(data) {
         data.forEach(function(ability) {
-            $('#filter_ability').append('<option value="' + ability + '">' + ability + '</option>');
+            $('#filter_ability').append($('<option>', { value: ability, text: ability }));
         });
     });
     $('#filter_ability').select2({
@@ -62,7 +62,7 @@ $(document).ready(function() {
     // Load Pokemon list
     $.get('/api/pokemon', function(data) {
         data.forEach(function(pokemon) {
-            $('#attacker').append('<option value="' + pokemon + '">' + pokemon + '</option>');
+            $('#attacker').append($('<option>', { value: pokemon, text: pokemon }));
         });
     });
 
@@ -71,9 +71,9 @@ $(document).ready(function() {
         $('.item').each(function() {
             const $this = $(this);
             $this.empty();
-            $this.append('<option value="">Select Item</option>');
+            $this.append($('<option>', { value: '', text: 'Select Item' }));
             data.forEach(function(item) {
-                $this.append('<option value="' + item + '">' + item + '</option>');
+                $this.append($('<option>', { value: item, text: item }));
             });
             $this.trigger('items-loaded');
             $this.select2({
@@ -87,28 +87,31 @@ $(document).ready(function() {
     // When attacker is selected, load its moves and abilities
     $('#attacker').change(function() {
         const pokemon = $(this).val();
+        if (pokemon) {
+            $(this).siblings('.select2-container').removeClass('input-error');
+        }
         $('#move').empty().append('<option value="">Select Move</option>').val('').trigger('change');
         $('#attacker_item').val('').trigger('change');
-        $('#attacker_ability').empty().append('<option value="">Any</option>').val('').trigger('change');
+        $('#attacker_ability').empty().append($('<option>', { value: '', text: 'Default (slot 1)' })).val('').trigger('change');
         if (pokemon) {
             // Load moves for this specific Pokemon
-            $.get('/api/moves/' + pokemon, function(data) {
+            $.get('/api/moves/' + encodeURIComponent(pokemon) + '?damaging=true', function(data) {
                 $('#move').empty().append('<option value="">Select Move</option>');
                 data.forEach(function(move) {
-                    $('#move').append('<option value="' + move + '">' + move + '</option>');
+                    $('#move').append($('<option>', { value: move, text: move }));
                 });
             });
 
             // Load abilities
-            $.get('/api/abilities/' + pokemon, function(data) {
-                $('#attacker_ability').empty().append('<option value="">Any</option>');
+            $.get('/api/abilities/' + encodeURIComponent(pokemon), function(data) {
+                $('#attacker_ability').empty().append($('<option>', { value: '', text: 'Default (slot 1)' }));
                 data.forEach(function(ability) {
-                    $('#attacker_ability').append('<option value="' + ability + '">' + ability + '</option>');
+                    $('#attacker_ability').append($('<option>', { value: ability, text: ability }));
                 });
                 // Initialize Select2 for ability if not already initialized
                 if (!$('#attacker_ability').data('select2')) {
                     $('#attacker_ability').select2({
-                        placeholder: 'Select Ability',
+                        placeholder: 'Default (slot 1)',
                         allowClear: true,
                         width: '100%'
                     });
@@ -120,6 +123,12 @@ $(document).ready(function() {
             });
         } else {
             $('#move').empty().append('<option value="">Select Move</option>');
+        }
+    });
+
+    $('#move').on('change', function() {
+        if ($(this).val()) {
+            $(this).siblings('.select2-container').removeClass('input-error');
         }
     });
 
@@ -159,8 +168,16 @@ $(document).ready(function() {
     function performBulkSurvive() {
         const attacker = $('#attacker').val();
         const move = $('#move').val();
+        const $attackerSelect = $('#attacker').siblings('.select2-container');
+        const $moveSelect = $('#move').siblings('.select2-container');
+        $attackerSelect.add($moveSelect).removeClass('input-error');
+        if (!attacker) {
+            $attackerSelect.addClass('input-error');
+        }
+        if (!move) {
+            $moveSelect.addClass('input-error');
+        }
         if (!attacker || !move) {
-            alert('Please select an attacker Pokemon and move');
             return;
         }
 
@@ -173,7 +190,7 @@ $(document).ready(function() {
                 attacker_evs: $('#attacker_evs').val() || '32',
                 defender_item: $('#defender_item').val() || null,
                 defender_nature: $('#defender_nature').val() || '1.0',
-                percent: $('#survival_percent').val() ? parseFloat($('#survival_percent').val()) : 100.0,
+                percent: $('#percent').val() ? parseFloat($('#percent').val()) : 100.0,
                 filter_type1: $('#filter_type1').val() || null,
                 filter_ability: $('#filter_ability').val() || null,
                 filter_min_bst: $('#filter_min_bst').val() ? parseInt($('#filter_min_bst').val()) : null,
@@ -182,15 +199,11 @@ $(document).ready(function() {
                 terrain: $('input[name="terrain"]:checked').val() || null,
                 weather: $('input[name="weather"]:checked').val() || null,
                 field: $('input[name="fieldState"]:checked').map(function() { return this.value; }).get(),
-                spikes: $('input[name="spikes"]:checked').val() || '0',
-                isSR: $('#SR').is(':checked'),
                 isReflect: $('#reflect').is(':checked'),
                 isLightScreen: $('#lightScreen').is(':checked'),
                 isAuroraVeil: $('#auroraVeil').is(':checked'),
                 isFriendGuard: $('#friendGuard').is(':checked'),
                 isProtect: $('#protect').is(':checked'),
-                isLeechSeed: $('#leechSeed').is(':checked'),
-                isSaltCure: $('#saltCure').is(':checked'),
                 isCharge: $('#charge').is(':checked'),
                 isHelpingHand: $('#helpingHand').is(':checked'),
                 isPowerTrickLeft: $('#powerTrickL').is(':checked'),
@@ -200,6 +213,7 @@ $(document).ready(function() {
 
         // Show loading state
         rows = [];
+        $('#bulkResults').prop('hidden', false);
         $('#searchBtn').prop('disabled', true);
         $('#cancelBtn').show();
         $('#progressBar').show();

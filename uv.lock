@@ -85,6 +85,15 @@ wheels = [
 ]
 
 [[package]]
+name = "gunicorn"
+version = "27.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0a/b3/addb4f148b938633977d983b852c82177b6c92d17837102a9a2aca061905/gunicorn-27.0.0.tar.gz", hash = "sha256:88d52e7c60b3af07bc8db431fbb450a94780f2cbe7c420c7cf1891392661c591", size = 932048, upload-time = "2026-11-10T11:20:59.207Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/85/2b/367de7fc2fd4cfd1814b0a31da023195eb4037c1fddc4d9e11cc965e1c00/gunicorn-27.0.0-py3-none-any.whl", hash = "sha256:1380f2f520abc3beb9e72cd2e728bd2d08a19b3ff6ac03ebd8da71d1798a4008", size = 261789, upload-time = "2026-11-10T11:20:57.621Z" },
+]
+
+[[package]]
 name = "itsdangerous"
 version = "2.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -281,13 +290,20 @@ dependencies = [
     { name = "typer" },
 ]
 
+[package.optional-dependencies]
+web = [
+    { name = "gunicorn" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "duckdb", specifier = ">=1.5.5" },
     { name = "flask", specifier = ">=3.0.0" },
+    { name = "gunicorn", marker = "extra == 'web'", specifier = ">=23.0.0" },
     { name = "tqdm", specifier = ">=4.70.1" },
     { name = "typer", specifier = ">=0.27.2" },
 ]
+provides-extras = ["web"]
 
 [[package]]
 name = "tqdm"

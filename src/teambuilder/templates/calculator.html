@@ -30,7 +30,7 @@ Calculator{% endblock %} {% block page_settings %}
 {% endblock %} {% block page_content %}
 <div aria-label="Calculation results" class="main-result-group" role="region">
   <div class="big-text">
-    <span id="mainResult">Select Pokémon and Move to Calculate</span>
+    <span id="mainResult">Select attacker, move, and defender.</span>
     <div id="tooltipText">Copied</div>
     <button id="calculate-btn" class="btn btn-wide ml20">Calculate</button>
     <div id="threshold" class="ml20">
@@ -40,7 +40,7 @@ Calculator{% endblock %} {% block page_settings %}
         id="percent"
         class="calc-trigger w60"
         value="100"
-        min="0"
+        min="1"
         max="100"
       />
     </div>
@@ -134,7 +134,8 @@ Calculator{% endblock %} {% block page_settings %}
     </fieldset>
   </div>
 
-  {% include "_field_conditions.html" %}
+  {% with hide_solver_ignored=true %} {% include "_field_conditions.html" %} {%
+  endwith %}
 
   <div aria-label="Defender" role="region" class="panel tool-panel">
     <fieldset class="poke-info tool-options" id="p2">
