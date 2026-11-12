@@ -11,6 +11,10 @@
 - Line numbers refer to the work copy of 2026-11-10. Search for the quoted names if the lines moved.
 - Section 7 gives the order of work. Section 8 lists questions for Mateo. Ask each question before you start the related task.
 
+## 1a. Status snapshot for the current branch
+
+This roadmap tracks the remaining work. Some earlier defects have already been fixed in the working tree; those closed items are intentionally omitted from the backlog below so the document reflects the outstanding issues and features only.
+
 ## 2. Project map
 
 | Path | Role |
@@ -64,17 +68,9 @@ uv run demo
 
 ## 4. Bugs
 
-Status of all entries: found by read, not reproduced.
+Status at review time: found by read, not reproduced. This backlog lists the remaining issues only; fixed defects have been removed to keep the roadmap current.
 
 ### High
-
-#### B1. CLI `survive` prints a spread that is not the cheapest
-
-- Where: `main.py:125-138`, `damage.py:495`, `damage.py:212-258`.
-- Cause: `min_evs_to_survive` has `showAll=True` as the default. In that mode the function returns one HP/defence pair per defence breakpoint, in order of defence points. The CLI takes element 0. Element 0 is the pair with the lowest defence and the highest HP cost.
-- Effect: `teambuilder survive` reports more points than the minimum in the general case. The comment at `main.py:125` and the README promise the cheapest spread.
-- Fix: pass `showAll=False` from the CLI. Consider `showAll=False` as the default. The web route `/api/survival` asks for all pairs explicitly.
-- Test: replace `calculate` with a fake damage table where a mixed spread costs less than the HP-only spread. Assert that the CLI prints the mixed spread.
 
 #### B2. Calculator page stays on "Calculating..." after a server error
 
@@ -82,14 +78,6 @@ Status of all entries: found by read, not reproduced.
 - Trigger: select a Status move. The move list holds the full learnset. `attacking_stat` raises `ValueError`. The server answers 400. jQuery skips the `success` callback.
 - Fix: add an `error` callback that shows `xhr.responseJSON.message`. Remove Status moves from the Calculator move list, or mark them as disabled.
 - Related: an empty percent field sends `null` (`calculator.js:506`). The server then compares a number with `None`. Validate percent on both sides (number, more than 0, at most 100 for survive).
-
-#### B3. `defender_side` and `attacker_side` arguments have no effect
-
-- Where: `calc.py:152-156` writes `request["defenderSide"]` and `request["attackerSide"]` at the top level of the request. `calc.js:71-73` reads `request.field` only.
-- Effect: each public function in `damage.py` accepts the two arguments. The calculator never sees them. Reflect or Helping Hand sent this way changes no number. No error appears.
-- The web app is correct because `api_helpers.apply_matchup_conditions` writes both sides inside `field_opts`.
-- Fix: in `build_request`, merge the two dicts into `request["field"]["defenderSide"]` and `request["field"]["attackerSide"]`. Delete the dead reads at `api_helpers.py:139-140`.
-- Test: a unit test on the request shape. An integration test where `defender_side={"isReflect": True}` lowers the damage of a physical move.
 
 ### Medium
 
@@ -139,12 +127,6 @@ Status of all entries: found by read, not reproduced.
 - Effect: the KO solver sweeps a stat that does nothing for Body Press and Foul Play. The survive solver sweeps the wrong defence for Psyshock. The README lists two of the four as known caveats.
 - Fix: a per-move override table `{move_id: (attacker_stat, defender_stat)}`. For Foul Play the attacker sweep returns the 0-point result. For Shell Side Arm evaluate both defences.
 
-#### B10. Ability "Any" or "None" in the UI is the slot-1 ability in the calculator
-
-- Where: `damage-calc/calc/src/pokemon.ts:61` (`options.ability || this.species.abilities?.[0]`). UI labels in `calculator.js:117`, `calculator.js:293`, `bulk_ko.js:88`.
-- Effect: a defender with a damage ability in slot 1 keeps that ability when the user selects "None". The description text shows it. The label says the opposite.
-- Fix: decide with Mateo (question Q3). Options: label the empty option "Default (slot 1)", or resolve "Any" on the defender with `least_damaged_ability`.
-
 #### B11. Hazard, Leech Seed and Salt Cure switches do not change solver results
 
 - Where: the solvers compare `range` with the percent (`damage.py:484`, `damage.py:220`). The calculator uses `isSR`, `spikes`, `isSeeded` and `isSaltCured` for the KO chance text only.
@@ -170,6 +152,14 @@ Status of all entries: found by read, not reproduced.
 | B24 | `src/teambuilder/__init__.py` | Leftover `main()` that prints "Hello from teambuilder!". | Delete. |
 
 ## 5. Improvements to the current code
+
+### Current staged change: solver performance
+
+The staged changes address I2's solver and calculator I/O work: minimum-point
+and damage-breakpoint searches use binary search, calculator request batches
+are written while responses are read, and identical requests share entries in
+a bounded per-process LRU cache. Focused tests cover the search thresholds,
+batch writing and cache behavior.
 
 ### I1. Test base and CI
 
@@ -262,7 +252,7 @@ Goal: one screen that shows how one set stands against the metagame.
 - CLI: `teambuilder matrix team.txt --slot 1 --threats threats.txt`. Web: page "Matchups" with a sortable table.
 - Done when: a matrix of one set against 100 threat sets returns in less than five seconds.
 
-### F5. Spread optimiser with the 66-point budget (L). Depends on B1, B4, B9, I2, F1
+### F5. Spread optimiser with the 66-point budget (L). Depends on B4, B9, I2, F1
 
 Goal: the cheapest full spread that meets several benchmarks at once. This is the core feature of the project.
 
@@ -310,22 +300,25 @@ Goal: the checks that players do by hand on each new team.
 
 ## 7. Order of work
 
-1. I1 (tests and CI) and B7 (one calculator version). All later work needs both.
-2. High bugs: B1, B2, B3.
-3. Medium bugs: B4, B5, B6, B8 with I3, B9, B10, B11.
-4. I2 (performance). Low bugs in one or two cleanup changes.
-5. F1 (speed), F2 (sets), F3 (team).
-6. F8 (search), F7 (CLI filters).
-7. F4 (threat matrix), F6 (team analysis).
-8. F5 (spread optimiser).
-9. I4 and I5 alongside the features that touch the same files.
+Updated order for the current branch state:
+
+1. Validate the current fixes and the associated tests.
+2. I1 (tests and CI) and B7 (one calculator version). All later work needs both.
+3. Remaining high bugs: B2, then the rest of the solver correctness fixes.
+4. Medium bugs: B4, B5, B6, B8 with I3, B9, B11.
+5. Low bug cleanup: B12-B24 in a single pass.
+6. I2 (performance) and the remaining data-model work in I3.
+7. F1 (speed), F2 (sets), F3 (team).
+8. F8 (search), F7 (CLI filters).
+9. F4 (threat matrix), F6 (team analysis).
+10. F5 (spread optimiser).
+11. I4 and I5 alongside the features that touch the same files.
 
 ## 8. Questions for Mateo
 
 - Q1. Give one Champions team as Showdown paste text. How does the paste write stat points?
 - Q2. Which team rules does the current regulation apply (duplicate species, duplicate items, Mega limit)?
-- Q3. For B10: what is the correct reading of "Any" ability on the defender? Slot 1, or the ability that takes the least damage?
-- Q4. For B11: remove the hazard switches from solver pages, or include hazard damage in the KO threshold?
-- Q5. For B7: is npm `@smogon/calc` 0.12.0 the version of record, or the pinned commit?
-- Q6. Which deploy path stays: Nix only, or Nix and Docker?
-- Q7. The README says that the author does not plan a front end. A front end exists now. Do the new features target the web pages, the CLI, or both?
+- Q3. For B11: remove the hazard switches from solver pages, or include hazard damage in the KO threshold?
+- Q4. For B7: is npm `@smogon/calc` 0.12.0 the version of record, or the pinned commit?
+- Q5. Which deploy path stays: Nix only, or Nix and Docker?
+- Q6. The README says that the author does not plan a front end. A front end exists now. Do the new features target the web pages, the CLI, or both?

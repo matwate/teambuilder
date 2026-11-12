@@ -1,4 +1,9 @@
 $(document).ready(function() {
+    function isValidDefenderEv(value) {
+        const match = /^(\d+)[+-]?$/.exec(String(value).trim());
+        return !String(value).trim() || (match !== null && Number(match[1]) <= 32);
+    }
+
     // Page navigation handlers
     $('#page-calculator').change(function() {
         if ($(this).is(':checked')) {
@@ -40,7 +45,7 @@ $(document).ready(function() {
 
     // Initialize Select2 for type filter (options already in HTML)
     $('#filter_type1').select2({
-        placeholder: 'Any',
+        placeholder: 'Default (slot 1)',
         allowClear: true,
         width: '14em'
     });
@@ -50,15 +55,15 @@ $(document).ready(function() {
     // Load Pokemon list
     $.get('/api/pokemon', function(data) {
         data.forEach(function(pokemon) {
-            $('#defender').append('<option value="' + pokemon + '">' + pokemon + '</option>');
+            $('#defender').append($('<option>', { value: pokemon, text: pokemon }));
         });
     });
 
     // Load all moves
-    $.get('/api/moves', function(data) {
-        $('#move').append('<option value="">Any (best move)</option>');
+    $.get('/api/moves?damaging=true', function(data) {
+        $('#move').append($('<option>', { value: '', text: 'Any (best move)' }));
         data.forEach(function(move) {
-            $('#move').append('<option value="' + move + '">' + move + '</option>');
+            $('#move').append($('<option>', { value: move, text: move }));
         });
     });
 
@@ -67,9 +72,9 @@ $(document).ready(function() {
         $('.item').each(function() {
             const $this = $(this);
             $this.empty();
-            $this.append('<option value="">Select Item</option>');
+            $this.append($('<option>', { value: '', text: 'Select Item' }));
             data.forEach(function(item) {
-                $this.append('<option value="' + item + '">' + item + '</option>');
+                $this.append($('<option>', { value: item, text: item }));
             });
             $this.trigger('items-loaded');
             $this.select2({
@@ -85,12 +90,12 @@ $(document).ready(function() {
         const pokemon = $(this).val();
         $('#move').val('').trigger('change');
         $('#defender_item').val('').trigger('change');
-        $('#defender_ability').empty().append('<option value="">Any</option>').val('').trigger('change');
+        $('#defender_ability').empty().append($('<option>', { value: '', text: 'Default (slot 1)' })).val('').trigger('change');
         if (pokemon) {
-            $.get('/api/abilities/' + pokemon, function(data) {
-                $('#defender_ability').empty().append('<option value="">Any</option>');
+            $.get('/api/abilities/' + encodeURIComponent(pokemon), function(data) {
+                $('#defender_ability').empty().append($('<option>', { value: '', text: 'Default (slot 1)' }));
                 data.forEach(function(ability) {
-                    $('#defender_ability').append('<option value="' + ability + '">' + ability + '</option>');
+                    $('#defender_ability').append($('<option>', { value: ability, text: ability }));
                 });
                 // Initialize Select2 for ability if not already initialized
                 if (!$('#defender_ability').data('select2')) {
@@ -105,6 +110,18 @@ $(document).ready(function() {
                     $('#defender_ability').val(data[0]).trigger('change');
                 }
             });
+        }
+    });
+
+    $('#defender').on('change', function() {
+        if ($(this).val()) {
+            $(this).siblings('.select2-container').removeClass('input-error');
+        }
+    });
+
+    $('#defender_def, #defender_spd').on('input', function() {
+        if (isValidDefenderEv($(this).val())) {
+            $(this).removeClass('input-error');
         }
     });
 
@@ -128,8 +145,20 @@ $(document).ready(function() {
 
     function performBulkKO() {
         const defender = $('#defender').val();
+        const $defenderSelect = $('#defender').siblings('.select2-container');
+        $defenderSelect.removeClass('input-error');
         if (!defender) {
-            alert('Please select a defender Pokemon');
+            $defenderSelect.addClass('input-error');
+            return;
+        }
+
+        let hasInvalidDefenderEvs = false;
+        $('#defender_def, #defender_spd').each(function() {
+            const isValid = isValidDefenderEv($(this).val());
+            $(this).toggleClass('input-error', !isValid);
+            hasInvalidDefenderEvs = hasInvalidDefenderEvs || !isValid;
+        });
+        if (hasInvalidDefenderEvs) {
             return;
         }
 
@@ -139,12 +168,12 @@ $(document).ready(function() {
             defender_item: $('#defender_item').val() || null,
             defender_ability: $('#defender_ability').val() || null,
             defender_hp: $('#defender_hp').val() ? parseInt($('#defender_hp').val()) : null,
-            defender_def: $('#defender_def').val() ? parseInt($('#defender_def').val()) : null,
-            defender_spd: $('#defender_spd').val() ? parseInt($('#defender_spd').val()) : null,
+            defender_def: $('#defender_def').val().trim() || null,
+            defender_spd: $('#defender_spd').val().trim() || null,
             move: $('#move').val() || null,
             attacker_item: $('#attacker_item').val() || null,
             positive_nature: $('#attacker_nature').val() === '1.1',
-            percent: $('#ko_percent').val() ? parseFloat($('#ko_percent').val()) : 100.0,
+            percent: $('#percent').val() ? parseFloat($('#percent').val()) : 100.0,
             filter_type1: $('#filter_type1').val() || null,
             filter_min_bst: $('#filter_min_bst').val() ? parseInt($('#filter_min_bst').val()) : null,
             filter_min_spe: $('#filter_min_spe').val() ? parseInt($('#filter_min_spe').val()) : null,
@@ -153,15 +182,11 @@ $(document).ready(function() {
             weather: $('input[name="weather"]:checked').val() || null,
             field: $('input[name="fieldState"]:checked').map(function() { return this.value; }).get(),
             format: $('input[name="format"]:checked').val() || 'doubles',
-            spikes: $('input[name="spikes"]:checked').val() || '0',
-            isSR: $('#SR').is(':checked'),
             isReflect: $('#reflect').is(':checked'),
             isLightScreen: $('#lightScreen').is(':checked'),
             isAuroraVeil: $('#auroraVeil').is(':checked'),
             isFriendGuard: $('#friendGuard').is(':checked'),
             isProtect: $('#protect').is(':checked'),
-            isLeechSeed: $('#leechSeed').is(':checked'),
-            isSaltCure: $('#saltCure').is(':checked'),
             isCharge: $('#charge').is(':checked'),
             isHelpingHand: $('#helpingHand').is(':checked'),
             isPowerTrickLeft: $('#powerTrickL').is(':checked'),
@@ -172,6 +197,7 @@ $(document).ready(function() {
         console.log('Sending data:', data);
 
         // Show loading state
+        $('#bulkResults').prop('hidden', false);
         $('#searchBtn').prop('disabled', true);
         $('#cancelBtn').show();
         $('#progressBar').show();
@@ -207,7 +233,7 @@ $(document).ready(function() {
                 $('#cancelBtn').hide();
 
                 if (!msg.success) {
-                    $('#resultsBody').html('<tr><td colspan="5" style="text-align: center; color: red;">Error: ' + msg.error + '</td></tr>');
+                    $('#resultsBody').html('<tr><td colspan="5" style="text-align: center; color: red;">Error: ' + esc(msg.error) + '</td></tr>');
                     $('#resultsCount').text('');
                 } else if ($('#resultsBody tr').length === 0) {
                     // No results found
@@ -265,9 +291,6 @@ $(document).ready(function() {
 
     function appendResult(result) {
         // Get current count
-        const currentCount = $('#resultsBody tr').length;
-        $('#resultsCount').text(currentCount + ' result' + (currentCount !== 0 ? 's' : ''));
-
         // Append the new result
         const ability = result.ability || 'Any';
         const row = `
@@ -280,6 +303,8 @@ $(document).ready(function() {
             </tr>
         `;
         $('#resultsBody').append(row);
+        const rowCount = $('#resultsBody tr').length;
+        $('#resultsCount').text(rowCount + ' result' + (rowCount !== 1 ? 's' : ''));
     }
 
     function esc(value) {

@@ -12,6 +12,12 @@ Every fragment here refers to the table as `p`, which is the alias
 from dataclasses import dataclass
 
 
+def _to_id(value: str) -> str:
+    import re
+
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
 @dataclass(frozen=True, slots=True)
 class Filter:
     """A `WHERE` fragment and the values for its `?` placeholders."""
@@ -27,7 +33,7 @@ class Filter:
         return self._combine("OR", other)
 
     def __invert__(self) -> "Filter":
-        return Filter(f"NOT ({self.sql})", f"not {self.natural} ", self.params)
+        return Filter(f"NOT ({self.sql})", f"not ({self.natural})", self.params)
 
     def _combine(self, op: str, other: "Filter") -> "Filter":
         # Parens keep precedence explicit in the SQL, so mixing & and | never
@@ -44,7 +50,11 @@ class Filter:
     def __str__(self): return self.natural
 
 def has_type(type_: str) -> Filter:
-    return Filter("? IN (p.type1, coalesce(p.type2, p.type1))", f"Is of type: {type_}",  (type_,))
+    return Filter(
+        "lower(?) IN (lower(p.type1), lower(coalesce(p.type2, p.type1)))",
+        f"Is of type: {type_}",
+        (type_,),
+    )
 
 def has_type1(type_: str) -> Filter:
     return Filter("p.type1 = ?", f"Type 1 is: {type_}", (type_,))
@@ -53,10 +63,28 @@ def has_type2(type_: str) -> Filter:
     return Filter("p.type2 = ?", f"Type 2 is: {type_}", (type_,))
 
 def learns(move: str) -> Filter:
-    return Filter("EXISTS (SELECT 1 FROM pokemon_moves m WHERE m.pokemon = p.name AND m.move=? )", f"Learns: {move}",  (move,))
+    from teambuilder.pokedex import resolve_move
+
+    canonical = resolve_move(move)
+    return Filter(
+        "EXISTS (SELECT 1 FROM pokemon_moves m WHERE m.pokemon = p.name "
+        "AND regexp_replace(lower(m.move), '[^a-z0-9]', '', 'g') = ?)",
+        f"Learns: {canonical}",
+        (_to_id(canonical),),
+    )
 
 def ability(ability: str) -> Filter:
-    return Filter("? IN (p.ability1, p.ability2, p.ability_hidden)", f"Ability: {ability}", (ability,))
+    from teambuilder.pokedex import resolve_ability
+
+    canonical = resolve_ability(ability)
+    return Filter(
+        "regexp_replace(lower(?), '[^a-z0-9]', '', 'g') IN "
+        "(regexp_replace(lower(p.ability1), '[^a-z0-9]', '', 'g'), "
+        "regexp_replace(lower(p.ability2), '[^a-z0-9]', '', 'g'), "
+        "regexp_replace(lower(p.ability_hidden), '[^a-z0-9]', '', 'g'))",
+        f"Ability: {canonical}",
+        (canonical,),
+    )
 
 
 

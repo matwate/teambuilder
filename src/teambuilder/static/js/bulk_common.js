@@ -48,7 +48,7 @@ $(document).ready(function() {
         'Mawile-Mega': 'Mawilite',
         'Aggron-Mega': 'Aggronite',
         'Medicham-Mega': 'Medichamite',
-        'Manectric-Mega': 'Manectrite',
+        'Manectric-Mega': 'Manectite',
         'Sharpedo-Mega': 'Sharpedonite',
         'Camerupt-Mega': 'Cameruptite',
         'Altaria-Mega': 'Altarianite',

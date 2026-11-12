@@ -4,10 +4,11 @@ from pathlib import Path
 from threading import Event
 from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from werkzeug.datastructures import MultiDict
 
+from teambuilder import damage
 from teambuilder.api_helpers import (
     build_bulk_ko_kwargs,
     build_matchup_options,
@@ -171,6 +172,27 @@ class MatchupOptionsTests(unittest.TestCase):
         self.assertTrue(build_bulk_ko_kwargs({"positive_nature": "true"})["positive_nature"])
         self.assertFalse(build_bulk_ko_kwargs({"positive_nature": "false"})["positive_nature"])
 
+    def test_bulk_ko_preserves_signed_defender_evs(self):
+        kwargs = build_bulk_ko_kwargs({
+            "defender_hp": "4",
+            "defender_def": "24+",
+            "defender_spd": "16-",
+        })
+
+        self.assertEqual(kwargs["defender_evs"], {
+            "hp": 4,
+            "def": "24+",
+            "spd": "16-",
+        })
+        defense_evs, defense_opts = damage.normalize_evs(kwargs["defender_evs"], None, "def")
+        special_defense_evs, special_defense_opts = damage.normalize_evs(
+            kwargs["defender_evs"], None, "spd"
+        )
+        self.assertEqual(defense_evs, {"hp": 4, "def": 24, "spd": 16})
+        self.assertEqual(defense_opts, {"nature": "Relaxed"})
+        self.assertEqual(special_defense_evs, {"hp": 4, "def": 24, "spd": 16})
+        self.assertEqual(special_defense_opts, {"nature": "Naive"})
+
     def test_bulk_survive_maps_repeated_field_states_and_conditions(self):
         data = MultiDict([
             ("attacker", "Pikachu"),
@@ -302,7 +324,10 @@ class MatchupOptionsTests(unittest.TestCase):
 
                 self.assertIn("Serious", checked_natures)
                 self.assertIn(expected_nature, checked_natures)
-                self.assertEqual(found["Pikachu"][0].points, 2)
+                investment = found["Pikachu"][0]
+                if investment is None:
+                    self.fail("KO filter returned no investment")
+                self.assertEqual(investment.points, 2)
 
     def test_bulk_survive_nature_follows_move_defense_stat(self):
         cases = (("Close Combat", "Relaxed"), ("Flamethrower", "Sassy"))
@@ -338,7 +363,10 @@ class MatchupOptionsTests(unittest.TestCase):
                     expected_nature,
                 )
                 self.assertFalse(minimum_spread.call_args.kwargs["showAll"])
-                self.assertEqual(found["Snorlax"][0].ability, "Thick Fat")
+                investment = found["Snorlax"][0]
+                if investment is None:
+                    self.fail("Survival filter returned no investment")
+                self.assertEqual(investment.ability, "Thick Fat")
 
     def test_only_abilities_named_in_the_damage_description_are_required(self):
         best = BestAbility(("Bulletproof",), (0, 0), "")
@@ -375,7 +403,7 @@ class MatchupOptionsTests(unittest.TestCase):
             events = iter(response.response)
             next(events)
             self.assertTrue(started.is_set())
-            events.close()
+            response.close()
 
         self.assertTrue(stopped.wait(timeout=1))
 

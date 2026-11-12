@@ -1,7 +1,8 @@
 import re
-from math import ceil
+from decimal import Decimal, ROUND_FLOOR
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from math import isfinite
 from pathlib import Path
 from typing import NamedTuple
 
@@ -12,12 +13,35 @@ from teambuilder.calc import (
     move_type as get_move_type, _TYPE_CHART, TYPE_CHANGING_ABILITIES,
     )
 from teambuilder.data import DB_PATH
-from teambuilder.pokedex import get_abilities_for_poke, learnset, that_learn, _query
+from teambuilder.pokedex import (
+    get_abilities_for_poke, learnset, that_learn, resolve_species, _query,
+)
 
 # Champions gives each stat 0-32 points, so every search below is a scan over
 # 33 candidates in one batch - ~20ms, and damage is monotonic in the invested
 # stat, so the first spread that clears the bar is the cheapest one.
 MAX_STAT_POINTS = 32
+
+
+def validate_percent(percent: float) -> float:
+    try:
+        value = float(percent)
+    except (TypeError, ValueError) as err:
+        raise ValueError("percent must be a number greater than 0 and at most 100") from err
+    if not isfinite(value) or not 0 < value <= 100:
+        raise ValueError("percent must be greater than 0 and at most 100")
+    return value
+
+
+def _move_id(move: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", move.lower())
+
+
+_MOVE_STAT_OVERRIDES = {
+    "bodypress": ("def", "def"),
+    "foulplay": ("atk", "def"),
+    "psyshock": ("spa", "def"),
+}
 
 
 class Investment(NamedTuple):
@@ -47,13 +71,14 @@ class BestAbility(NamedTuple):
 
 
 def attacking_stat(move: str) -> str:
-    """Which stat a move attacks off, by category.
+    """Return the attack stat a move normally uses, including fixed exceptions.
 
-    Not reliable for the handful of moves that break the rule - Body Press is
-    Physical but uses Def, Psyshock is Special but hits Def - so investing by
-    category will do nothing for those. The calculator still gets their damage
-    right; it is only this choice of stat to invest in that is wrong.
+    Shell Side Arm is matchup-dependent and is explicitly evaluated against
+    both attack stats by the solvers.
     """
+    override = _MOVE_STAT_OVERRIDES.get(_move_id(move))
+    if override:
+        return override[0]
     category = move_category(move)
     if category is None:
         raise ValueError(f"{move!r} is not in the Champions move data")
@@ -62,10 +87,13 @@ def attacking_stat(move: str) -> str:
     return "spa" if category == "Special" else "atk"
 
 
-def relevant_defense_stat(attack_type: str) -> str:
+def relevant_defense_stat(attack_type: str, move: str | None = None) -> str:
+    override = _MOVE_STAT_OVERRIDES.get(_move_id(move)) if move else None
+    if override:
+        return override[1]
     if attack_type == "spa":
         return "spd"
-    elif attack_type == "atk":
+    elif attack_type in ("atk", "def"):
         return "def"
     else:
         raise ValueError(f"{attack_type!r} is not in a valid attack type")
@@ -137,10 +165,17 @@ def with_nature(opts, modifier, stat):
     A neutral modifier ("", "1.0", None) leaves opts alone instead of stamping
     "Serious" over whatever nature the caller had set.
     """
-    sign = SIGNS[modifier] if modifier else ""
+    if modifier not in SIGNS:
+        accepted = ", ".join(repr(value) for value in SIGNS if value is not None)
+        raise ValueError(f"unknown nature modifier {modifier!r}; expected one of {accepted}, or None")
+    sign = SIGNS[modifier]
     if not sign:
         return opts
-    return {**(opts or {}), "nature": NATURES[stat.lower(), sign]}
+    try:
+        nature = NATURES[stat.lower(), sign]
+    except KeyError as err:
+        raise ValueError(f"no nature modifier is defined for stat {stat!r}") from err
+    return {**(opts or {}), "nature": nature}
 
 
 def normalize_evs(evs, opts, stat):
@@ -175,32 +210,76 @@ def _evaluate(requests: list[dict], points: list[int] | None = None):
     """
     point_values = points if points is not None else range(len(requests))
     for pts, response in zip(point_values, calculate(requests)):
-        if "error" in response:
-            raise CalcError(response["error"])
-        investment = Investment(
-            pts, response["desc"], tuple(response["percent"]),
-            tuple(response["range"]), response["defenderMaxHP"],
-        )
-        yield response, investment
+        yield response, _investment(response, pts)
+
+
+def _investment(response: dict, points: int) -> Investment:
+    if "error" in response:
+        raise CalcError(response["error"])
+    return Investment(
+        points, response["desc"], tuple(response["percent"]),
+        tuple(response["range"]), response["defenderMaxHP"],
+    )
 
 
 def _cheapest(requests: list[dict], accept) -> Investment | None:
-    """First response that `accept` likes, which is the cheapest by monotonicity."""
-    for response, investment in _evaluate(requests):
-        if accept(response):
-            return investment
-    return None
+    """Find the cheapest accepted request with logarithmic calculator calls."""
+    if not requests:
+        return None
+
+    cache: dict[int, tuple[dict, Investment]] = {}
+
+    def at(index: int) -> tuple[dict, Investment]:
+        if index not in cache:
+            response = calculate(requests[index])
+            cache[index] = (response, _investment(response, index))
+        return cache[index]
+
+    last = len(requests) - 1
+    if not accept(at(last)[0]):
+        return None
+
+    low, high = 0, last
+    while low < high:
+        middle = (low + high) // 2
+        if accept(at(middle)[0]):
+            high = middle
+        else:
+            low = middle + 1
+    return at(low)[1]
 
 
-def _breakpoints(requests: list[dict], key) -> list[Investment]:
-    """One Investment per distinct value of `key(response)`, at the fewest points that reach it."""
+def _breakpoints(requests: list[dict], key, points: list[int] | None = None) -> list[Investment]:
+    """Find the first request for each monotonic change in `key(response)`."""
+    if not requests:
+        return []
+
+    point_values = points if points is not None else range(len(requests))
+    cache: dict[int, tuple[dict, Investment]] = {}
+
+    def at(index: int) -> tuple[dict, Investment]:
+        if index not in cache:
+            response = calculate(requests[index])
+            cache[index] = (response, _investment(response, point_values[index]))
+        return cache[index]
+
     breakpoints: list[Investment] = []
-    previous = object()  # sentinel: never equals a real key value, so points=0 is always recorded
-    for response, investment in _evaluate(requests):
-        current = key(response)
-        if current != previous:
-            breakpoints.append(investment)
-            previous = current
+    start = 0
+    breakpoints.append(at(start)[1])
+    last = len(requests) - 1
+    while start < last:
+        current = key(at(start)[0])
+        if key(at(last)[0]) == current:
+            break
+        low, high = start + 1, last
+        while low < high:
+            middle = (low + high) // 2
+            if key(at(middle)[0]) == current:
+                low = middle + 1
+            else:
+                high = middle
+        start = low
+        breakpoints.append(at(start)[1])
     return breakpoints
 
 
@@ -209,8 +288,16 @@ def _all(requests: list[dict], points: list[int] | None = None) -> list[Investme
     return [investment for _, investment in _evaluate(requests, points)]
 
 
-def calculate_HP_from_Breakpoints(breakpoints: list[Investment], PERCENT, HP, INVEST_IN, showAll=True
+def calculate_HP_from_Breakpoints(
+    breakpoints: list[Investment],
+    PERCENT,
+    HP,
+    INVEST_IN,
+    showAll=True,
+    *,
+    base_hp: int = 0,
 ):
+    PERCENT = validate_percent(PERCENT)
     # Initialise the min points used above the 32/32 cap
     minPoints: int = 64
     minPairs: list[dict[str, int]] = []
@@ -220,19 +307,23 @@ def calculate_HP_from_Breakpoints(breakpoints: list[Investment], PERCENT, HP, IN
         dealt = inv.damage[1]
         current_hp = inv.user_hp
         points = inv.points
-        pct = PERCENT/100
-        calculated_HP = ((dealt-pct*current_hp)/pct)
-        # Add a small amount to the calculated HP, to make sure we always survive a hit (round up if needed)
-        adjusted_HP = max(ceil(calculated_HP + 0.01), 0)
-        if adjusted_HP > MAX_STAT_POINTS:
+        pct = Decimal(str(PERCENT))
+        if Decimal(dealt * 100) < pct * current_hp:
+            additional_hp = 0
+        else:
+            additional_hp = int(
+                (Decimal(dealt * 100) / pct - current_hp).to_integral_value(rounding=ROUND_FLOOR)
+            ) + 1
+        total_hp = base_hp + max(additional_hp, 0)
+        if total_hp > MAX_STAT_POINTS:
             # We cannot survive at the given defense investment
             continue
 
-        total_points_used = adjusted_HP + points
+        total_points_used = total_hp + points
 
         if showAll:
-            allPairs.append({HP: adjusted_HP, INVEST_IN: points})
-            if calculated_HP < 0:
+            allPairs.append({HP: total_hp, INVEST_IN: points})
+            if additional_hp == 0:
                 # 0 HP is already enough, so any more defence investment is redundant
                 break
             continue
@@ -243,13 +334,13 @@ def calculate_HP_from_Breakpoints(breakpoints: list[Investment], PERCENT, HP, IN
             # Empty the list
             minPairs.clear()
             # Add the new best combination
-            minPairs.append({HP: adjusted_HP, INVEST_IN: points})
+            minPairs.append({HP: total_hp, INVEST_IN: points})
 
         elif minPoints == total_points_used:
             # Add an equally good combination
-            minPairs.append({HP: adjusted_HP, INVEST_IN: points})
+            minPairs.append({HP: total_hp, INVEST_IN: points})
 
-        if calculated_HP < 0:
+        if additional_hp == 0:
             # We do not need to check any more values
             break
     if showAll:
@@ -271,10 +362,14 @@ def verify_Min_EVs(
     move_opts: dict | None = None,
     field_opts: dict | None = None,
     defender_side: dict | None = None,
-    attacker_side: dict | None = None):
+    attacker_side: dict | None = None,
+    percent: float = 100.0,
+):
+    percent = validate_percent(percent)
+    defense_key = next(key for key in minPairs[0] if key != "hp")
 
-    requests = [
-        build_request(
+    def request_for(pair: dict[str, int]) -> dict:
+        return build_request(
             attacker, move, defender,
             attacker_evs=attacker_evs,
             attacker_opts=attacker_opts,
@@ -285,9 +380,46 @@ def verify_Min_EVs(
             defender_side=defender_side,
             attacker_side=attacker_side,
         )
+
+    def survives(response: dict) -> bool:
+        return (
+            Decimal(response["range"][1] * 100)
+            < Decimal(str(percent)) * response["defenderMaxHP"]
+        )
+
+    verified_by_defense = {}
+    retry_pairs = []
+    initial = list(zip(minPairs, _evaluate([request_for(pair) for pair in minPairs])))
+    for pair, (response, investment) in initial:
+        defense = pair[defense_key]
+        if survives(response):
+            verified_by_defense[defense] = investment._replace(
+                points=sum(pair.values()), spread=pair
+            )
+        else:
+            retry_pairs.extend(
+                {**pair, "hp": hp}
+                for hp in range(pair["hp"] + 1, MAX_STAT_POINTS + 1)
+            )
+
+    retries = []
+    if retry_pairs:
+        retries = list(zip(
+            retry_pairs,
+            _evaluate([request_for(pair) for pair in retry_pairs]),
+        ))
+    for pair, (response, investment) in retries:
+        defense = pair[defense_key]
+        if defense not in verified_by_defense and survives(response):
+            verified_by_defense[defense] = investment._replace(
+                points=sum(pair.values()), spread=pair
+            )
+
+    return [
+        verified_by_defense[pair[defense_key]]
         for pair in minPairs
+        if pair[defense_key] in verified_by_defense
     ]
-    return _all(requests, points=[sum(pair.values()) for pair in minPairs])
 
 def _required_ability(best: BestAbility, desc: str) -> str | None:
     """Report only abilities named as relevant in the damage description."""
@@ -416,23 +548,27 @@ def _ko_at_best_ability(
     stat = attacking_stat(move)
     nature_options = [options]
     if positive_nature:
-        raised_opts = with_nature(options.get("attacker_opts"), "+", stat)
-        nature_options.append({**options, "attacker_opts": raised_opts})
+        nature_stats = ("atk", "spa") if _move_id(move) == "shellsidearm" else (stat,)
+        for nature_stat in nature_stats:
+            raised_opts = with_nature(options.get("attacker_opts"), "+", nature_stat)
+            nature_options.append({**options, "attacker_opts": raised_opts})
 
     cheapest = None
     for nature_opts in nature_options:
-        best = most_damaging_ability(
-            name, move, defender,
-            attacker_evs={stat: MAX_STAT_POINTS},
-            **nature_opts,
-        )
-        pinned = {
-            **nature_opts,
-            "attacker_opts": _pin_ability(nature_opts.get("attacker_opts"), best.names[0]),
-        }
-        investment = min_evs_to_ko(name, move, defender, percent=percent, **pinned)
-        if investment is not None and (cheapest is None or investment.points < cheapest.points):
-            cheapest = investment._replace(ability=_required_ability(best, investment.desc))
+        sweep_stats = ("atk", "spa") if _move_id(move) == "shellsidearm" else (stat,)
+        for sweep_stat in sweep_stats:
+            best = most_damaging_ability(
+                name, move, defender,
+                attacker_evs={sweep_stat: MAX_STAT_POINTS},
+                **nature_opts,
+            )
+            pinned = {
+                **nature_opts,
+                "attacker_opts": _pin_ability(nature_opts.get("attacker_opts"), best.names[0]),
+            }
+            investment = min_evs_to_ko(name, move, defender, percent=percent, **pinned)
+            if investment is not None and (cheapest is None or investment.points < cheapest.points):
+                cheapest = investment._replace(ability=_required_ability(best, investment.desc))
     return cheapest
 
 
@@ -460,10 +596,54 @@ def min_evs_to_ko(
     reading of "this OHKOes": a range that only sometimes reaches 100% does
     not count. For a guaranteed 2HKO set percent to 50.
     """
+    percent = validate_percent(percent)
     stat = attacking_stat(move)
+    if _move_id(move) == "shellsidearm":
+        solutions = []
+        for attacking in ("atk", "spa"):
+            defense = relevant_defense_stat(attacking)
+            evs, opts = normalize_evs(defender_evs, defender_opts, defense)
+            solution = _cheapest(
+                [
+                    build_request(
+                        attacker, move, defender,
+                        attacker_evs={attacking: points},
+                        attacker_opts=attacker_opts,
+                        defender_evs=evs,
+                        defender_opts=opts,
+                        move_opts=move_opts,
+                        field_opts=field_opts,
+                        defender_side=defender_side,
+                        attacker_side=attacker_side,
+                    )
+                    for points in range(MAX_STAT_POINTS + 1)
+                ],
+                lambda response: 100 * response["range"][0] / response["defenderMaxHP"] >= percent,
+            )
+            if solution is not None:
+                solutions.append(solution)
+        return min(solutions, key=lambda result: result.points) if solutions else None
     defender_evs, defender_opts = normalize_evs(
-        defender_evs, defender_opts, relevant_defense_stat(stat)
+        defender_evs, defender_opts, relevant_defense_stat(stat, move)
     )
+
+    # Foul Play uses the target's Attack, so spending points on the user's
+    # Attack cannot change its damage.
+    if _move_id(move) == "foulplay":
+        request = build_request(
+            attacker, move, defender,
+            attacker_opts=attacker_opts,
+            defender_evs=defender_evs,
+            defender_opts=defender_opts,
+            move_opts=move_opts,
+            field_opts=field_opts,
+            defender_side=defender_side,
+            attacker_side=attacker_side,
+        )
+        return _cheapest(
+            [request],
+            lambda response: 100 * response["range"][0] / response["defenderMaxHP"] >= percent,
+        )
 
     return _cheapest(
         [
@@ -492,7 +672,7 @@ def min_evs_to_survive(
     defender_nature: str | None = None,
     *,
     percent: float = 100.0,
-    showAll=True,
+    showAll: bool = False,
     attacker_opts: dict | None = None,
     attacker_evs: dict | str | None = None,
     defender_evs: dict | None = None,
@@ -501,6 +681,7 @@ def min_evs_to_survive(
     field_opts: dict | None = None,
     defender_side: dict | None = None,
     attacker_side: dict | None = None,
+    _defense_override: str | None = None,
 ) -> list[Investment] | None:
     """Fewest points across HP and the relevant defence to hold `move` under
     `percent`%, or None if 32/32 cannot manage it.
@@ -519,11 +700,35 @@ def min_evs_to_survive(
     - A string like "0-" for 0 investment with minimizing nature
     - A dict for full EV spread control
     """
+    percent = validate_percent(percent)
+    if _move_id(move) == "shellsidearm" and _defense_override is None:
+        results = []
+        for defense in ("def", "spd"):
+            found = min_evs_to_survive(
+                attacker, move, defender, defender_nature,
+                percent=percent, showAll=True,
+                attacker_opts=attacker_opts, attacker_evs=attacker_evs,
+                defender_evs=defender_evs, defender_opts=defender_opts,
+                move_opts=move_opts, field_opts=field_opts,
+                defender_side=defender_side, attacker_side=attacker_side,
+                _defense_override=defense,
+            )
+            results.extend(found or [])
+        if not results:
+            return None
+        if not showAll:
+            cheapest = min(inv.points for inv in results)
+            results = [inv for inv in results if inv.points == cheapest]
+        return results
     hp = "hp"
     stat = attacking_stat(move)
-    invest = relevant_defense_stat(stat)
+    invest = _defense_override or relevant_defense_stat(stat, move)
     defender_opts = with_nature(defender_opts, defender_nature, invest)
     attacker_evs, attacker_opts = normalize_evs(attacker_evs, attacker_opts, stat)
+
+    base_hp = (defender_evs or {}).get(hp, 0)
+    if not isinstance(base_hp, int) or not 0 <= base_hp <= MAX_STAT_POINTS:
+        raise ValueError(f"defender hp points must be an integer from 0 to {MAX_STAT_POINTS}")
 
     breakpoints = find_damage_breakpoints(
         attacker, move, defender,
@@ -538,7 +743,9 @@ def min_evs_to_survive(
         attacker_side=attacker_side,
     )
 
-    optimal_EVs = calculate_HP_from_Breakpoints(breakpoints, percent, hp, invest, showAll=showAll)
+    optimal_EVs = calculate_HP_from_Breakpoints(
+        breakpoints, percent, hp, invest, showAll=True, base_hp=base_hp
+    )
 
     # optimal_EVs is empty because we could not find a solution that survived
     if not optimal_EVs:
@@ -550,14 +757,14 @@ def min_evs_to_survive(
         defender_evs=defender_evs, defender_opts=defender_opts,
         move_opts=move_opts, field_opts=field_opts,
         defender_side=defender_side, attacker_side=attacker_side,
+        percent=percent,
     )
-    # _evaluate numbers results by their position in the batch, so the points
-    # on a verified spread count nothing useful - put the real total back, and
-    # carry the split itself so callers do not have to read it out of the desc.
-    return [
-        verified[i]._replace(points=sum(optimal_EVs[i].values()), spread=optimal_EVs[i])
-        for i in range(len(verified))
-    ]
+    if not verified:
+        return None
+    if not showAll:
+        cheapest = min(inv.points for inv in verified)
+        verified = [inv for inv in verified if inv.points == cheapest]
+    return verified
 
 
 def find_damage_breakpoints(
@@ -579,6 +786,12 @@ def find_damage_breakpoints(
     if invest not in ("hp", "def", "spd"):
         raise ValueError(f"invest must be hp, def or spd, got {invest!r}")
 
+    base_points = (defender_evs or {}).get(invest, 0)
+    if not isinstance(base_points, int) or not 0 <= base_points <= MAX_STAT_POINTS:
+        raise ValueError(
+            f"defender {invest} points must be an integer from 0 to {MAX_STAT_POINTS}"
+        )
+    investments = list(range(base_points, MAX_STAT_POINTS + 1))
     requests = [
         build_request(
             attacker, move, defender,
@@ -591,9 +804,11 @@ def find_damage_breakpoints(
             defender_side=defender_side,
             attacker_side=attacker_side,
         )
-        for points in range(MAX_STAT_POINTS + 1)
+        for points in investments
     ]
-    return _breakpoints(requests, key=lambda response: response["range"][1])
+    if _move_id(move) == "superfang":
+        return _all(requests, points=investments)
+    return _breakpoints(requests, key=lambda response: response["range"][1], points=investments)
 
 
 # ---------------------------------------------------------------------------
@@ -666,6 +881,7 @@ def ko_filter(
     `result_callback(row)` fires with a ko_result_row for each one kept. A
     callback that raises stops the run, which is how a web request cancels it.
     """
+    percent = validate_percent(percent)
     options = dict(
         attacker_opts=attacker_opts, defender_evs=defender_evs, defender_opts=defender_opts,
         move_opts=move_opts, field_opts=field_opts,
@@ -741,6 +957,8 @@ def can_ko_any_atk(
 
     `positive_nature` also checks the nature that raises each move's attacking stat.
     """
+    percent = validate_percent(percent)
+    defender = resolve_species(defender, db=db)
     rows = _query("SELECT type1, type2 FROM pokemon WHERE name = ?", [defender], db=db)
     if not rows:
         raise ValueError(f"{defender!r} is not in the pokedex")
@@ -774,6 +992,11 @@ def can_ko_any_atk(
 
             def worth_checking(move: str) -> bool:
                 if not only_super_effective:
+                    return True
+                if _move_id(move) in {
+                    "freezedry", "flyingpress", "weatherball", "terrainpulse",
+                    "terablast", "ragingbull", "aurawheel",
+                }:
                     return True
                 kind = get_move_type(move)
                 if not kind:
@@ -854,6 +1077,7 @@ def survive_filter(
     `result_callback(row)` fires with a survive_result_row for each one kept,
     exactly as in can_ko_any_atk. With a progress callback the tqdm bar is off.
     """
+    percent = validate_percent(percent)
     if require_learns and not that_learn(move, [attacker], db=db):
         raise ValueError(f"{attacker} does not learn {move}")
 

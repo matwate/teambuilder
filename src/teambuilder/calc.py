@@ -3,6 +3,7 @@ import json
 import re
 import subprocess
 import threading
+from collections import OrderedDict
 from functools import cache
 from pathlib import Path
 from typing import overload
@@ -69,11 +70,27 @@ def calculate(request: dict | list[dict]) -> dict | list[dict]:
     single request returns a single response, and raises CalcError instead.
     """
     batch = request if isinstance(request, list) else [request]
-    lines = [json.dumps(r) for r in batch]
-    responses = _served(lines)
-    if responses is None:
-        stdout = _node([str(CALC_JS)], "\n".join(lines))
-        responses = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+    keys = [json.dumps(item, sort_keys=True, separators=(",", ":")) for item in batch]
+    with _calculation_cache_lock:
+        missing = list(dict.fromkeys(key for key in keys if key not in _calculation_cache))
+        if missing:
+            responses = _served(missing)
+            if responses is None:
+                stdout = _node([str(CALC_JS)], "\n".join(missing))
+                responses = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+            if len(responses) != len(missing):
+                raise CalcError(
+                    f"calculator returned {len(responses)} responses for {len(missing)} requests"
+                )
+            for key, response_item in zip(missing, responses):
+                _calculation_cache[key] = json.dumps(response_item, separators=(",", ":"))
+                _calculation_cache.move_to_end(key)
+            while len(_calculation_cache) > _CALC_CACHE_LIMIT:
+                _calculation_cache.popitem(last=False)
+        responses = []
+        for key in keys:
+            _calculation_cache.move_to_end(key)
+            responses.append(json.loads(_calculation_cache[key]))
 
     if isinstance(request, list):
         return responses
@@ -85,10 +102,23 @@ def calculate(request: dict | list[dict]) -> dict | list[dict]:
 # Champout names 42 species the calculator does not have, and every one of them
 # resolves cleanly - each mapping below was checked by comparing base stats.
 #
-# The cosmetic families are one species to the calculator: Furfrou's nine trims,
-# Vivillon's eighteen patterns, Florges' flower colours, Alcremie's creams and
-# swirls, and Maushold's Family of Four all share their base form's stats.
-COSMETIC_FORMS = ("Furfrou", "Vivillon", "Florges", "Alcremie", "Maushold")
+# These exact cosmetic forms share their base form's stats in the calculator.
+COSMETIC_FORMS = {
+    "Furfrou-Dandy", "Furfrou-Debutante", "Furfrou-Diamond", "Furfrou-Heart",
+    "Furfrou-Kabuki", "Furfrou-La Reine", "Furfrou-Matron", "Furfrou-Pharaoh",
+    "Furfrou-Star",
+    "Vivillon-Archipelago", "Vivillon-Continental", "Vivillon-Elegant",
+    "Vivillon-Fancy", "Vivillon-Garden", "Vivillon-High Plains",
+    "Vivillon-Jungle", "Vivillon-Marine", "Vivillon-Meadow", "Vivillon-Modern",
+    "Vivillon-Monsoon", "Vivillon-Ocean", "Vivillon-Poké Ball", "Vivillon-Polar",
+    "Vivillon-River", "Vivillon-Sandstorm", "Vivillon-Savanna", "Vivillon-Sun",
+    "Vivillon-Tundra",
+    "Florges-Blue", "Florges-Orange", "Florges-White", "Florges-Yellow",
+    "Alcremie-Caramel Swirl", "Alcremie-Lemon Cream", "Alcremie-Matcha Cream",
+    "Alcremie-Mint Cream", "Alcremie-Rainbow Swirl", "Alcremie-Ruby Cream",
+    "Alcremie-Ruby Swirl", "Alcremie-Salted Cream",
+    "Maushold-Family of Four",
+}
 
 # These two are not missing, only named differently. Gourgeist-Jumbo is
 # 85/100/122/58/75/54, which is the calculator's Gourgeist-Super, and champout's
@@ -106,9 +136,8 @@ def species(name: str) -> str:
     """
     if name in RENAMED:
         return RENAMED[name]
-    for base in COSMETIC_FORMS:
-        if name.startswith(base):
-            return base
+    if _to_id(name) in _COSMETIC_FORM_IDS:
+        return name.split("-", 1)[0]
     return name
 
 
@@ -148,12 +177,13 @@ def build_request(
         "field": {"gameType": "Doubles", **(field_opts or {})},
     }
 
-
-    # Add side conditions if provided
-    if defender_side:
-        request["defenderSide"] = defender_side
-    if attacker_side:
-        request["attackerSide"] = attacker_side
+    # Side conditions are properties of Field in @smogon/calc.
+    for key, side in (("defenderSide", defender_side), ("attackerSide", attacker_side)):
+        if side:
+            request["field"][key] = {
+                **request["field"].get(key, {}),
+                **side,
+            }
 
     # Only worth sending when there is one: calc.js echoes it back, which is
     # how a response is matched to its request in a batch.
@@ -178,19 +208,21 @@ def _move_types(gen: int) -> dict[str, str | None]:
 # lock is for the web server, whose requests run on threads of their own.
 _server: subprocess.Popen | None = None
 _server_lock = threading.Lock()
+_CALC_CACHE_LIMIT = 8192
+_calculation_cache: OrderedDict[str, str] = OrderedDict()
+_calculation_cache_lock = threading.Lock()
 
 
 def _served(lines: list[str]) -> list[dict] | None:
     """Responses from the long-lived calc.js, or None if it is not answering.
 
-    Lines go one at a time, each answer read before the next is sent: a whole
-    batch written up front would fill the pipe back while nobody reads it, and
-    both sides would wait on each other. None leaves the batch to a one-off
-    process, which runs it the old way and reports node's own error if there
-    is one - the next batch starts a fresh server.
+    A writer thread sends the batch while this thread drains stdout, preventing
+    either pipe from filling up and blocking the other. None leaves the batch
+    to a one-off process; the next batch starts a fresh server.
     """
     global _server
     with _server_lock:
+        writer = None
         try:
             if _server is None or _server.poll() is not None:
                 # stderr is the library's chatter (see calc.js); nothing reads
@@ -205,17 +237,31 @@ def _served(lines: list[str]) -> list[dict] | None:
             stdout = _server.stdout
             if stdin is None or stdout is None:
                 raise BrokenPipeError
-            for line in lines:
-                stdin.write(line + "\n")
-                stdin.flush()
+            write_errors: list[OSError | ValueError] = []
+
+            def write_batch() -> None:
+                try:
+                    stdin.write("".join(line + "\n" for line in lines))
+                    stdin.flush()
+                except (OSError, ValueError) as err:
+                    write_errors.append(err)
+
+            writer = threading.Thread(target=write_batch, daemon=True)
+            writer.start()
+            for _ in lines:
                 answer = stdout.readline()
                 if not answer:
                     raise BrokenPipeError
                 responses.append(json.loads(answer))
+            writer.join()
+            if write_errors:
+                raise write_errors[0]
             return responses
         except (OSError, ValueError):
             if _server is not None:
                 _server.kill()
+            if writer is not None:
+                writer.join(timeout=1)
             _server = None
             return None
 
@@ -237,6 +283,9 @@ def _to_id(name: str) -> str:
     # The library keys its data by id: "Grassy Glide" is grassyglide, and
     # "Farfetch'd" (with either apostrophe) is farfetchd.
     return re.sub(r"[^a-z0-9]+", "", name.lower())
+
+
+_COSMETIC_FORM_IDS = {_to_id(name) for name in COSMETIC_FORMS}
 
 
 # Type effectiveness chart for Champions (same as standard Pokemon type chart)

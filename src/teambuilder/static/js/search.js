@@ -79,7 +79,7 @@ $(document).ready(function() {
         $.get('/api/moves', function(data) {
             allMoves = data;
             data.forEach(function(move) {
-                $('#move').append('<option value="' + move + '">' + move + '</option>');
+                $('#move').append($('<option>', { value: move, text: move }));
             });
             $('#move').val(null).trigger('change');
         });
@@ -226,18 +226,31 @@ $(document).ready(function() {
                 if (response.success) {
                     displayResults(response.results);
                 } else {
-                    $('#resultsBody').html('<tr><td colspan="10" style="text-align: center; color: red;">Error: ' + response.error + '</td></tr>');
+                    $('#resultsBody').html('<tr><td colspan="10" style="text-align: center; color: red;">Error: ' + $('<div>').text(response.error).html() + '</td></tr>');
                     $('#resultsCount').text('');
                 }
             },
             error: function(xhr, status, error) {
-                $('#resultsBody').html('<tr><td colspan="10" style="text-align: center; color: red;">Error: ' + error + '</td></tr>');
+                $('#resultsBody').html('<tr><td colspan="10" style="text-align: center; color: red;">Error: ' + $('<div>').text(error).html() + '</td></tr>');
                 $('#resultsCount').text('');
             }
         });
     }
 
     function displayResults(results) {
+        if (currentSort.column) {
+            results = results.slice().sort((a, b) => {
+                const aVal = typeof a[currentSort.column] === 'string'
+                    ? a[currentSort.column].toLowerCase()
+                    : a[currentSort.column];
+                const bVal = typeof b[currentSort.column] === 'string'
+                    ? b[currentSort.column].toLowerCase()
+                    : b[currentSort.column];
+                if (aVal < bVal) return currentSort.direction === 'asc' ? -1 : 1;
+                if (aVal > bVal) return currentSort.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
         if (results.length === 0) {
             $('#resultsBody').html('<tr><td colspan="10" style="text-align: center;">No Pokemon found matching filters</td></tr>');
             $('#resultsCount').text('0 results');
@@ -251,13 +264,15 @@ $(document).ready(function() {
             const type1Color = typeColors[pokemon.type1] || '#888';
             const type2Color = pokemon.type2 ? (typeColors[pokemon.type2] || '#888') : null;
 
+            const type1 = $('<div>').text(pokemon.type1).html();
+            const type2 = $('<div>').text(pokemon.type2 || '').html();
             const typeBadges = pokemon.type2
-                ? `<span class="type-badge" style="background: ${type1Color};">${pokemon.type1}</span><span class="type-badge" style="background: ${type2Color};">${pokemon.type2}</span>`
-                : `<span class="type-badge" style="background: ${type1Color};">${pokemon.type1}</span>`;
+                ? `<span class="type-badge" style="background: ${type1Color};">${type1}</span><span class="type-badge" style="background: ${type2Color};">${type2}</span>`
+                : `<span class="type-badge" style="background: ${type1Color};">${type1}</span>`;
 
             html += `
                 <tr>
-                    <td>${pokemon.name}</td>
+                    <td>${$('<div>').text(pokemon.name).html()}</td>
                     <td>${typeBadges}</td>
                     <td>${pokemon.hp}</td>
                     <td>${pokemon.atk}</td>

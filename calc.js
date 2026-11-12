@@ -40,6 +40,18 @@ const write = (value) => process.stdout.write(JSON.stringify(value) + "\n");
 // Generations.get does not validate its argument, and a bad one only surfaces
 // later as "Cannot read properties of undefined", so check it here.
 const DEFAULT_GEN = 0;
+const champions = Generations.get(DEFAULT_GEN);
+if (
+  !champions ||
+  !champions.species ||
+  !champions.moves ||
+  !champions.species.get('pikachu') ||
+  !champions.moves.get('thunderbolt')
+) {
+  throw new Error(
+    'The installed @smogon/calc package does not include Pokémon Champions generation 0 data.'
+  );
+}
 
 // STAT POINTS: Champions replaced EVs with stat points, and the calculator
 // models that by reading the "evs" field as stat points when gen is 0:

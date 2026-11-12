@@ -1,132 +1,133 @@
-{% extends "_tool_page.html" %}
+{% extends "_tool_page.html" %} {% block page_title %}Bulk Survival Finder{%
+endblock %} {% block page_heading %}Bulk Survival Finder{% endblock %} {% block
+page_content %} {% with calculate_prompt="Select attacker and move to
+calculate." %} {% include "_bulk_calculate_header.html" %} {% endwith %}
 
-{% block page_title %}Bulk Survival Finder{% endblock %}
-{% block page_heading %}Bulk Survival Finder{% endblock %}
-{% block page_styles %}
-		<link type="text/css" rel="stylesheet" href="/static/css/bulk_survive.css" />
-{% endblock %}
+<div class="bulk-results" id="bulkResults" hidden>
+  <button class="search-btn cancel" id="cancelBtn" style="display: none">
+    Cancel
+  </button>
+  <div class="progress-bar" id="progressBar">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+  <div class="progress-text" id="progressText">Processing...</div>
+  <div class="results-count" id="resultsCount"></div>
+  <table class="result-table">
+    <thead>
+      <tr>
+        <th>Pokemon</th>
+        <th>Total Points</th>
+        <th>HP</th>
+        <th>Def</th>
+        <th>Required Ability</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody id="resultsBody"></tbody>
+  </table>
+</div>
 
-{% block page_content %}
+<div class="tool-input-layout">
+  <div aria-label="Attacker Options" class="panel tool-panel" role="region">
+    <fieldset class="bulk-options poke-info tool-options">
+      <legend align="center">Attacker Options</legend>
+      <div class="filter-group">
+        <label for="attacker">Pok&eacute;mon</label>
+        <select id="attacker">
+          <option value="">Select Pok&eacute;mon</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="move">Move</label>
+        <select id="move"></select>
+      </div>
+      <div class="filter-group">
+        <label for="attacker_item">Item</label>
+        <select id="attacker_item" class="item"></select>
+      </div>
+      <div class="filter-group">
+        <label for="attacker_ability">Ability</label>
+        <select id="attacker_ability" class="ability"></select>
+      </div>
+      <div class="filter-group">
+        <label for="attacker_evs">Atk / SpA</label>
+        <input type="text" id="attacker_evs" value="0" placeholder="32+" />
+        <small class="subtext">(Add + for +nature, - for -nature)</small>
+      </div>
+    </fieldset>
+  </div>
 
-			<div class="bulk-results">
-				<div class="progress-bar" id="progressBar">
-					<div class="progress-fill" id="progressFill"></div>
-				</div>
-				<div class="progress-text" id="progressText">Processing...</div>
-				<div class="results-count" id="resultsCount"></div>
-				<table class="result-table">
-					<thead>
-						<tr>
-							<th>Pokemon</th>
-							<th>Total Points</th>
-							<th>HP</th>
-							<th>Def</th>
-							<th>Required Ability</th>
-							<th>Description</th>
-						</tr>
-					</thead>
-					<tbody id="resultsBody">
-						<tr>
-							<td colspan="6" style="text-align: center;">Configure attacker and click Find Defenders</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
+  {% with default_format="doubles" %} {% with hide_solver_ignored=true %} {%
+  include "_field_conditions.html" %} {% endwith %} {% endwith %}
 
-			<div class="tool-input-layout">
-				<div aria-label="Attacker Options" class="panel tool-panel" role="region">
-					<fieldset class="bulk-options poke-info tool-options">
-						<legend align="center">Attacker Options</legend>
-						<div class="filter-group">
-							<label for="attacker">Pok&eacute;mon</label>
-							<select id="attacker"></select>
-						</div>
-						<div class="filter-group">
-							<label for="move">Move</label>
-							<select id="move"></select>
-						</div>
-						<div class="filter-group">
-							<label for="attacker_item">Item</label>
-							<select id="attacker_item" class="item"></select>
-						</div>
-						<div class="filter-group">
-							<label for="attacker_ability">Ability</label>
-							<select id="attacker_ability" class="ability"></select>
-						</div>
-						<div class="filter-group">
-							<label for="attacker_evs">Atk / SpA</label>
-							<input type="text" id="attacker_evs" value="0" placeholder="e.g. 32+" />
-							<small class="subtext">(Add + for +nature, - for -nature)</small>
-						</div>
-					</fieldset>
-				</div>
-
-				{% with default_format="doubles" %}
-				{% include "_field_conditions.html" %}
-				{% endwith %}
-
-				<div aria-label="Defender Options" class="panel tool-panel" role="region">
-					<fieldset class="bulk-options poke-info tool-options">
-						<legend align="center">Defender Options</legend>
-						<div class="filter-group">
-							<label for="defender_item">Item (optional)</label>
-							<select id="defender_item" class="item"></select>
-						</div>
-						<div class="filter-group">
-							<label for="survival_percent">Survival Threshold (%)</label>
-							<input type="number" id="survival_percent" value="100" min="0" max="100" />
-						</div>
-						<div class="filter-group">
-							<label for="defender_nature">Defensive Nature</label>
-							<select id="defender_nature">
-								<option value="1.0">Neutral</option>
-								<option value="1.1">+10% to the targeted defense</option>
-							</select>
-						</div>
-						<div class="filter-group">
-							<label for="filter_type1">Type 1 (optional)</label>
-							<select id="filter_type1">
-								<option value="">Any</option>
-								<option value="Normal">Normal</option>
-								<option value="Fire">Fire</option>
-								<option value="Water">Water</option>
-								<option value="Electric">Electric</option>
-								<option value="Grass">Grass</option>
-								<option value="Ice">Ice</option>
-								<option value="Fighting">Fighting</option>
-								<option value="Poison">Poison</option>
-								<option value="Ground">Ground</option>
-								<option value="Flying">Flying</option>
-								<option value="Psychic">Psychic</option>
-								<option value="Bug">Bug</option>
-								<option value="Rock">Rock</option>
-								<option value="Ghost">Ghost</option>
-								<option value="Dragon">Dragon</option>
-								<option value="Dark">Dark</option>
-								<option value="Steel">Steel</option>
-								<option value="Fairy">Fairy</option>
-							</select>
-						</div>
-						<div class="filter-group">
-							<label for="filter_ability">Can Have Ability (optional)</label>
-							<select id="filter_ability"></select>
-						</div>
-						<div class="filter-group">
-							<label for="filter_min_bst">Min BST (optional)</label>
-							<input type="number" id="filter_min_bst" placeholder="e.g., 500" min="0" max="720" />
-						</div>
-						<div class="filter-group">
-							<label for="filter_min_hp">Min HP (optional)</label>
-							<input type="number" id="filter_min_hp" placeholder="e.g., 100" min="0" max="255" />
-						</div>
-					</fieldset>
-					<button class="btn btn-wide bulk-calculate" id="searchBtn">Find Defenders</button>
-					<button class="search-btn cancel" id="cancelBtn" style="display: none;">Cancel</button>
-				</div>
-			</div>
-{% endblock %}
-
-{% block page_scripts %}
-		<script src="/static/js/bulk_common.js"></script>
-		<script src="/static/js/bulk_survive.js"></script>
+  <div aria-label="Defender Options" class="panel tool-panel" role="region">
+    <fieldset class="bulk-options poke-info tool-options">
+      <legend align="center">Defender Options</legend>
+      <div class="filter-group">
+        <label for="defender_item">Item</label>
+        <select id="defender_item" class="item"></select>
+      </div>
+      <div class="filter-group">
+        <label for="defender_nature">Defensive Nature</label>
+        <select id="defender_nature">
+          <option value="1.0">Neutral</option>
+          <option value="1.1">+10% to the targeted defense</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filter_type1">Type 1</label>
+        <select id="filter_type1">
+          <option value="">Any</option>
+          <option value="Normal">Normal</option>
+          <option value="Fire">Fire</option>
+          <option value="Water">Water</option>
+          <option value="Electric">Electric</option>
+          <option value="Grass">Grass</option>
+          <option value="Ice">Ice</option>
+          <option value="Fighting">Fighting</option>
+          <option value="Poison">Poison</option>
+          <option value="Ground">Ground</option>
+          <option value="Flying">Flying</option>
+          <option value="Psychic">Psychic</option>
+          <option value="Bug">Bug</option>
+          <option value="Rock">Rock</option>
+          <option value="Ghost">Ghost</option>
+          <option value="Dragon">Dragon</option>
+          <option value="Dark">Dark</option>
+          <option value="Steel">Steel</option>
+          <option value="Fairy">Fairy</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filter_ability">Can Have Ability</label>
+        <select id="filter_ability"></select>
+      </div>
+      <div class="filter-group filter-range">
+        <div>
+          <label for="filter_min_bst">Min BST</label>
+          <input
+            type="number"
+            id="filter_min_bst"
+            placeholder="500"
+            min="0"
+            max="720"
+          />
+        </div>
+        <div>
+          <label for="filter_min_hp">Min HP</label>
+          <input
+            type="number"
+            id="filter_min_hp"
+            placeholder="100"
+            min="0"
+            max="255"
+          />
+        </div>
+      </div>
+    </fieldset>
+  </div>
+</div>
+{% endblock %} {% block page_scripts %}
+<script src="/static/js/bulk_common.js"></script>
+<script src="/static/js/bulk_survive.js"></script>
 {% endblock %}

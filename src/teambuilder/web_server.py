@@ -60,6 +60,9 @@ def get_moves(pokemon):
     from teambuilder.pokedex import learnset
     try:
         moves = learnset(pokemon)
+        if request.args.get("damaging") == "true":
+            from teambuilder.calc import move_category
+            moves = [move for move in moves if move_category(move) in ("Physical", "Special")]
         return jsonify(moves)
     except ValueError:
         return jsonify([]), 404
@@ -90,7 +93,7 @@ def get_items():
         "Manectite", "Houndoominite", "Audinite", "Lopunnite", "Sablenite",
         "Sharpedonite", "Gyaradosite", "Lucarionite", "Heracronite", "Aerodactylite",
         "Eelektrossite", "Glalitite", "Pinsirite", "Falinksite", "Scolipite",
-        "Gardevoirite", "Galladite", "Skarmorite", "Clefablite", "Dragalgite", "Manectrite",
+        "Gardevoirite", "Galladite", "Skarmorite", "Clefablite", "Dragalgite",
         "Scraftinite", "Pyroarite", "Malamarite", "Alakazite", "Drampanite",
         "Excadrite", "Chandelurite", "Aggronite", "Salamencite", "Metagrossite",
         "Gengarite", "Medichamite", "Abomasite", "Scizorite", "Garchompite",
@@ -104,7 +107,7 @@ def get_items():
         "Glimmoranite", "Golisopite", "Golurkite", "Lucarionite Z", "Meowsticite",
         "Raichunite X", "Raichunite Y", "Sceptilite", "Scovillainite", "Staraptite",
         "Swampertite",
-        "Leek", "Eject Button", "KingKin", "Bright Powder", "Zoom Lens",
+        "Leek", "Eject Button", "King's Rock", "Bright Powder", "Zoom Lens",
         "Air Balloon", "Scope Lens", "Rocky Helmet", "Wide Lens", "Iron Ball",
         "Shed Shell", "Red Card", "Quick Claw", "Light Ball", "Spell Tag",
         "Metal Coat", "Soft Sand", "Wise Glasses", "Normal Gem", "Muscle Band",
@@ -130,6 +133,9 @@ def get_all_moves():
         with duckdb.connect(DB_PATH, read_only=True) as con:
             result = con.execute("SELECT DISTINCT move FROM pokemon_moves ORDER BY move").fetchall()
             moves = [row[0] for row in result]
+            if request.args.get("damaging") == "true":
+                from teambuilder.calc import move_category
+                moves = [move for move in moves if move_category(move) in ("Physical", "Special")]
             return jsonify(moves)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -184,6 +190,8 @@ def get_move_category(move):
     """Get the category (Physical/Special/Status) of a move."""
     from teambuilder.calc import move_category
     try:
+        if ''.join(character for character in move.lower() if character.isalnum()) == 'shellsidearm':
+            return jsonify({'category': 'Dynamic'})
         category = move_category(move)
         if category:
             return jsonify({'category': category})
